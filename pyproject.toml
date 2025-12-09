@@ -12,4 +12,5 @@ development = [
     "datasets>=4.4.1",
     "ipywidgets>=8.1.8",
     "jupyterlab>=4.5.0",
+    "openai>=2.9.0",
 ]
