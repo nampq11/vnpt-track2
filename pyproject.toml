@@ -1,10 +1,12 @@
 [project]
 name = "vnpt-track2"
 version = "0.1.0"
-description = "Add your description here"
+description = "LLM-based Vietnamese QA agent for VNPT Hackathon Track 2"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "openai>=2.9.0",
+]
 
 [dependency-groups]
 developer = []
@@ -13,4 +15,6 @@ development = [
     "ipywidgets>=8.1.8",
     "jupyterlab>=4.5.0",
     "openai>=2.9.0",
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
 ]

@@ -1,0 +1,44 @@
+# Example configuration for VNPT Track 2 inference
+
+# Ollama LLM Service Configuration
+ollama:
+  base_url: "http://localhost:11434/v1"
+  api_key: "ollama"
+  model: "qwen3:1.7b"
+  timeout: 120
+  max_retries: 3
+
+# Inference Pipeline Configuration
+inference:
+  batch_size: 1
+  system_prompt: null  # Use default if null
+  use_caching: false
+  save_intermediate: false
+  verbose: true
+
+# Data Paths
+data:
+  test_file: "data/test.json"
+  val_file: "data/val.json"
+  output_dir: "results"
+
+# Example system prompts (customize as needed)
+system_prompts:
+  default: |
+    Bạn là một trợ lý thông minh chuyên trả lời câu hỏi trắc nghiệm tiếng Việt.
+    Hãy đọc kỹ câu hỏi, phân tích các lựa chọn, và chọn đáp án chính xác nhất.
+    Trước khi đưa ra kết luận, hãy suy luận từng bước.
+    Cuối cùng, cho biết rõ ràng đáp án bạn chọn (A, B, C hoặc D).
+  
+  stem: |
+    Bạn là một chuyên gia toán học và khoa học.
+    Giải quyết bài toán từng bước.
+    Hiển thị tất cả các tính toán.
+    Chọn đáp án chính xác.
+  
+  reading: |
+    Bạn đọc lướt kỹ lưỡng.
+    Tập trung vào các chi tiết chính từ đoạn văn.
+    Trả lời dựa trên thông tin được cung cấp.
+    Chọn đáp án phù hợp nhất.
+
