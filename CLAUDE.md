@@ -6,20 +6,19 @@ LLM-based agent for Vietnamese multiple-choice question answering. Built for VNP
 ## Tech Stack
 - **Language**: Python 3.11+
 - **Package Manager**: `uv` (use `uv run`, `uv add`, `uv sync`)
-- **LLM Backend**: Ollama via OpenAI-compatible API
+- **LLM Backend**: Ollama (default) or Azure OpenAI
 - **Default Model**: `qwen3:1.7b`
 
 ## Project Structure
 ```
 src/brain/
-├── agent/          # Agent orchestration
-├── llm/
-│   ├── messages/   # Conversation & context management
-│   └── services/   # LLM service abstractions (Ollama)
-├── system-prompt/  # System prompt management
-└── utils/          # Shared utilities
+├── inference/      # Pipeline, processor, evaluator
+├── llm/services/   # LLM providers (Ollama, Azure)
+├── system_prompt/  # Prompt generation
+├── tools/          # Tool management
+└── config.py       # Configuration classes
 data/               # QA datasets (val.json, test.json)
-notebooks/          # Data preparation & experiments
+results/            # Prediction outputs
 ```
 
 ## Quick Commands
@@ -27,30 +26,37 @@ notebooks/          # Data preparation & experiments
 # Install dependencies
 uv sync --group development
 
-# Run prediction
-uv run python predict.py
+# Quick test (5 questions)
+./bin/inference.sh test
 
-# Run inference script
-./bin/inference.sh
+# Full evaluation
+./bin/inference.sh eval val
 
-# Start JupyterLab
-uv run jupyter lab
+# Inference only (no metrics)
+./bin/inference.sh inference test
+
+# Direct CLI
+uv run python predict.py --mode eval --input data/val.json --model qwen3:1.7b
 ```
 
 ## Data Format
-Questions in `data/*.json` follow this structure:
+Questions in `data/*.json`:
 - `qid`: Question ID
 - `question`: Vietnamese question text (may include context)
 - `choices`: Array of 4 options
 - `answer`: Letter (A/B/C/D)
 
 ## Key Interfaces
-- `LLMService` (`src/brain/llm/services/type.py`): Abstract base for LLM providers
-- `ContextManager` (`src/brain/llm/messages/manager.py`): Manages conversation history
-- `EnhancedPromptManager` (`src/brain/system-prompt/enhanced-manager.py`): System prompt generation
+- `LLMService` → `src/brain/llm/services/type.py` (abstract base)
+- `InferencePipeline` → `src/brain/inference/pipeline.py` (main entry)
+- `QuestionProcessor` → `src/brain/inference/processor.py` (parsing)
+- `Evaluator` → `src/brain/inference/evaluator.py` (metrics)
+- `Config` → `src/brain/config.py` (env-based config)
 
 ## Conventions
 - Async-first: Use `async/await` for LLM calls
 - Type hints required on all public functions
 - Vietnamese text handling: Ensure UTF-8 encoding
 
+
+- After implement code, don't create new any files documentation. only update existing files.
