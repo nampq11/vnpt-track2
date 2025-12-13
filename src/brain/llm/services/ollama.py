@@ -23,7 +23,7 @@ class OllamaService(LLMService):
         self.max_iterations = max_iterations
         self.config = OllamaServiceConfig(model=model)
     
-    async def generate(
+    def generate(
         self,
         user_input: str,
         stream: Optional[bool] = False,
@@ -33,6 +33,22 @@ class OllamaService(LLMService):
             response = self.openai.chat.completions.create(
                 model=self.model,
                 messages=[
+                    {"role": "system", "content": """Bạn là một trợ lý thông minh chuyên trả lời câu hỏi trắc nghiệm tiếng Việt.
+Hãy đọc kỹ câu hỏi, phân tích các lựa chọn, và chọn đáp án chính xác nhất.
+Suy nghĩ theo từng bước 1 để có đáp án chính xác nhất.
+
+Output trả về dưới tag <answer> và không đưa ra giải thích.
+
+Example:
+câu hỏi: "Câu hỏi là gì?"
+choices: 
+- A: Đáp án A
+- B: Đáp án B
+- C: Đáp án C
+- D: Đáp án D
+
+Answer:     
+"""},
                     {"role": "user", "content": user_input}
                 ],
                 stream=stream,
@@ -56,5 +72,6 @@ class OllamaService(LLMService):
     def get_config(self) -> LLMServiceConfig:
         """Return service configuration"""
         return self.config
+
 
 

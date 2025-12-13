@@ -4,7 +4,8 @@ from typing import List, Optional, Dict
 from dataclasses import asdict
 import json
 
-from src.brain.llm.services.type import LLMService
+from brain.llm.services.type import LLMService
+from brain.tools import AzureService
 from src.brain.llm.services.ollama import OllamaService
 from src.brain.inference.processor import Question, QuestionProcessor, PredictionResult
 from src.brain.inference.evaluator import Evaluator, EvaluationMetrics
@@ -15,7 +16,7 @@ class InferencePipeline:
     
     def __init__(
         self,
-        llm_service: LLMService,
+        llm_service: OllamaService,
         system_prompt: Optional[str] = None,
     ):
         self.llm_service = llm_service
@@ -112,12 +113,16 @@ async def run_pipeline(
     Returns:
         EvaluationMetrics if evaluate=True, else None
     """
-    # Use provided service or default to Ollama
+    # Initialize Ollama service
     if llm_service is None:
         llm_service = OllamaService(
             base_url="http://localhost:11434/v1",
             api_key="ollama",
             model="qwen3:1.7b"
+        )
+    else:
+        llm_service = AzureService(
+            model="gpt-4o-mini"
         )
 
     # Create pipeline
