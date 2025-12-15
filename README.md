@@ -454,3 +454,110 @@ Questions in `data/*.json` follow this structure:
 - Type hints required on all public functions
 - Vietnamese text handling: Ensure UTF-8 encoding
 
+---
+
+## VNPT API Configuration (Phase 9)
+
+### Overview
+
+The system supports **per-model credentials** for VNPT APIs:
+- **LLM Embedding** (500 req/min) - For text vectorization and RAG retrieval
+- **LLM Small** (60 req/h) - For fast chat completions
+- **LLM Large** (40 req/h) - For complex reasoning tasks
+
+### Configuration Methods
+
+#### Method 1: JSON Configuration File (Recommended)
+
+Create `config.vnpt.json`:
+
+```json
+{
+  "credentials": [
+    {
+      "authorization": "Bearer <YOUR_EMBEDDING_TOKEN>",
+      "tokenId": "<YOUR_EMBEDDING_TOKEN_ID>",
+      "tokenKey": "<YOUR_EMBEDDING_TOKEN_KEY>",
+      "llmApiName": "LLM embeddings"
+    },
+    {
+      "authorization": "Bearer <YOUR_SMALL_TOKEN>",
+      "tokenId": "<YOUR_SMALL_TOKEN_ID>",
+      "tokenKey": "<YOUR_SMALL_TOKEN_KEY>",
+      "llmApiName": "LLM small"
+    },
+    {
+      "authorization": "Bearer <YOUR_LARGE_TOKEN>",
+      "tokenId": "<YOUR_LARGE_TOKEN_ID>",
+      "tokenKey": "<YOUR_LARGE_TOKEN_KEY>",
+      "llmApiName": "LLM large"
+    }
+  ]
+}
+```
+
+Then set environment variable:
+
+```bash
+export VNPT_CONFIG_FILE=./config.vnpt.json
+export VNPT_MODEL_SIZE=small
+```
+
+#### Method 2: Environment Variables
+
+```bash
+# Embedding Model
+export VNPT_API_KEY_EMBEDDING="Bearer <YOUR_EMBEDDING_TOKEN>"
+export VNPT_TOKEN_ID_EMBEDDING="<YOUR_EMBEDDING_TOKEN_ID>"
+export VNPT_TOKEN_KEY_EMBEDDING="<YOUR_EMBEDDING_TOKEN_KEY>"
+
+# Small Chat Model
+export VNPT_API_KEY_SMALL="Bearer <YOUR_SMALL_TOKEN>"
+export VNPT_TOKEN_ID_SMALL="<YOUR_SMALL_TOKEN_ID>"
+export VNPT_TOKEN_KEY_SMALL="<YOUR_SMALL_TOKEN_KEY>"
+
+# Large Chat Model
+export VNPT_API_KEY_LARGE="Bearer <YOUR_LARGE_TOKEN>"
+export VNPT_TOKEN_ID_LARGE="<YOUR_LARGE_TOKEN_ID>"
+export VNPT_TOKEN_KEY_LARGE="<YOUR_LARGE_TOKEN_KEY>"
+
+export VNPT_MODEL_SIZE=small
+```
+
+#### Method 3: Legacy Single Credentials
+
+For backward compatibility:
+
+```bash
+export VNPT_API_KEY="Bearer <YOUR_TOKEN>"
+export VNPT_TOKEN_ID="<YOUR_TOKEN_ID>"
+export VNPT_TOKEN_KEY="<YOUR_TOKEN_KEY>"
+export VNPT_MODEL_SIZE=small
+```
+
+### Usage
+
+```bash
+# Run inference with VNPT API
+uv run python predict.py --mode eval --input data/val.json --provider vnpt --model small
+
+# Docker deployment
+docker build -t vnpt-titan-shield .
+docker run \
+  -v /path/to/config.vnpt.json:/app/config.vnpt.json \
+  -e VNPT_CONFIG_FILE=/app/config.vnpt.json \
+  -e VNPT_MODEL_SIZE=small \
+  -v /path/to/data:/app/data \
+  vnpt-titan-shield
+```
+
+### Configuration Priority
+
+1. **JSON Config File** - If `VNPT_CONFIG_FILE` is set and file exists
+2. **Per-Model Environment Variables** - If JSON file is not available
+3. **Legacy Single Set** - Fallback to `VNPT_API_KEY`, `VNPT_TOKEN_ID`, `VNPT_TOKEN_KEY`
+
+### API Documentation
+
+Refer to `context_for_ai/llm_api_description.md` for detailed VNPT API specifications.
+

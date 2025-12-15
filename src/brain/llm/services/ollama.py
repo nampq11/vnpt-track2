@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from src.brain.llm.services.type import LLMService, LLMServiceConfig
 from openai import OpenAI
 
@@ -64,6 +64,25 @@ Answer:
                 return response.choices[0].message.content
         except Exception as e:
             raise RuntimeError(f"Error generating response from Ollama: {str(e)}")
+    
+    async def embed(self, text: str) -> List[float]:
+        """
+        Get embedding vector for text using Ollama
+        
+        Args:
+            text: Text to embed
+            
+        Returns:
+            Embedding vector (list of floats)
+        """
+        try:
+            response = self.openai.embeddings.create(
+                model=self.model,
+                input=text
+            )
+            return response.data[0].embedding
+        except Exception as e:
+            raise RuntimeError(f"Error generating embedding from Ollama: {str(e)}")
     
     def get_all_tools(self):
         """Return available tools"""
