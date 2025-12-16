@@ -6,20 +6,20 @@ LLM-based agent for Vietnamese multiple-choice question answering. Built for VNP
 ## Tech Stack
 - **Language**: Python 3.11+
 - **Package Manager**: `uv` (use `uv run`, `uv add`, `uv sync`)
-- **LLM Backend**: Ollama via OpenAI-compatible API
-- **Default Model**: `qwen3:1.7b`
+- **LLM Backend**: VNPT AI API (primary), Ollama (local dev)
+- **Default Model**: `vnptai-hackathon-small`
 
 ## Project Structure
 ```
 src/brain/
-├── agent/          # Agent orchestration
-├── llm/
-│   ├── messages/   # Conversation & context management
-│   └── services/   # LLM service abstractions (Ollama)
-├── system-prompt/  # System prompt management
-└── utils/          # Shared utilities
+├── agent/          # Agent orchestration & query processing
+│   └── tasks/      # Task handlers (math, reading, rag)
+├── inference/      # Batch inference pipeline & evaluation
+├── llm/services/   # LLM providers (VNPT, Ollama)
+├── system_prompt/  # Prompt generation
+└── config.py       # Configuration classes
 data/               # QA datasets (val.json, test.json)
-notebooks/          # Data preparation & experiments
+config/             # API credentials (vnpt.json)
 ```
 
 ## Quick Commands
@@ -45,12 +45,15 @@ Questions in `data/*.json` follow this structure:
 - `answer`: Letter (A/B/C/D)
 
 ## Key Interfaces
+- `Agent` (`src/brain/agent/agent.py`): Main query processing with classification & task routing
 - `LLMService` (`src/brain/llm/services/type.py`): Abstract base for LLM providers
-- `ContextManager` (`src/brain/llm/messages/manager.py`): Manages conversation history
-- `EnhancedPromptManager` (`src/brain/system-prompt/enhanced-manager.py`): System prompt generation
+- `VNPTService` (`src/brain/llm/services/vnpt.py`): VNPT AI API client with embedding support
+- `InferencePipeline` (`src/brain/inference/pipeline.py`): Batch inference & evaluation
+
+## Agent Architecture
+Query → Guardrail → Classification → Task Execution (Math/Reading/RAG) → Answer
 
 ## Conventions
 - Async-first: Use `async/await` for LLM calls
 - Type hints required on all public functions
 - Vietnamese text handling: Ensure UTF-8 encoding
-
