@@ -9,6 +9,7 @@ from src.brain.llm.services.ollama import OllamaService
 from src.brain.llm.services.vnpt import VNPTService
 from src.brain.llm.services.azure import AzureService
 from src.brain.llm.services.type import LLMService
+from src.brain.agent.agent import Agent
 from src.brain.inference.processor import Question, QuestionProcessor, PredictionResult
 from src.brain.inference.evaluator import Evaluator, EvaluationMetrics
 
@@ -19,14 +20,20 @@ class InferencePipeline:
     def __init__(
         self,
         llm_service: LLMService,
+        use_agent: bool = True,
         system_prompt: Optional[str] = None,
     ):
         self.llm_service = llm_service
+        self.use_agent = use_agent
         self.system_prompt = system_prompt or self._get_default_system_prompt()
         self.processor = QuestionProcessor()
+        
+        # Initialize Agent if enabled
+        if self.use_agent:
+            self.agent = Agent(llm_service=llm_service)
     
     def _get_default_system_prompt(self) -> str:
-        """Get default system prompt for QA"""
+        """Get default system prompt for QA (only used when use_agent=False)"""
         return """Bạn là một trợ lý thông minh chuyên trả lời câu hỏi trắc nghiệm tiếng Việt.
 Hãy đọc kỹ câu hỏi, phân tích các lựa chọn, và chọn đáp án chính xác nhất.
 Trước khi đưa ra kết luận, hãy suy luận từng bước.
@@ -53,17 +60,30 @@ Cuối cùng, cho biết rõ ràng đáp án bạn chọn (A, B, C hoặc D)."""
             print(f"Processing question {i+1}/{len(questions)} ({question.qid})...", end=" ")
             
             try:
-                # Format question for LLM
-                user_prompt = self.processor.format_for_llm(question)
-                
-                # Create full message with system prompt
-                full_prompt = f"{self.system_prompt}\n\n{user_prompt}"
-                
-                # Call LLM
-                response = await self.llm_service.generate(full_prompt)
-                
-                # Parse answer
-                answer = self.processor.parse_answer(response)
+                if self.use_agent:
+                    # Use Agent with task routing
+                    # Format choices as dict
+                    options = {
+                        chr(65 + i): choice 
+                        for i, choice in enumerate(question.choices)
+                    }
+                    
+                    # Call agent
+                    result = await self.agent.process_query(
+                        query=question.question,
+                        options=options,
+                        query_id=question.qid
+                    )
+                    
+                    # Extract answer from result
+                    answer = result.get('answer', 'A')
+                    
+                else:
+                    # Use simple LLM prompting (legacy)
+                    user_prompt = self.processor.format_for_llm(question)
+                    full_prompt = f"{self.system_prompt}\n\n{user_prompt}"
+                    response = await self.llm_service.generate(full_prompt)
+                    answer = self.processor.parse_answer(response)
                 
                 result = PredictionResult(
                     qid=question.qid,
@@ -118,6 +138,7 @@ async def run_pipeline(
     test_file: str,
     output_file: str,
     evaluate: bool = False,
+    use_agent: bool = True,
     system_prompt: Optional[str] = None,
     provider: Literal["ollama", "vnpt", "azure"] = "ollama",
     model: Optional[str] = None,
@@ -129,7 +150,8 @@ async def run_pipeline(
         test_file: Path to test data JSON file
         output_file: Path to save predictions
         evaluate: Whether to evaluate against ground truth
-        system_prompt: Custom system prompt
+        use_agent: Whether to use Agent with task routing (default: True)
+        system_prompt: Custom system prompt (only used when use_agent=False)
         provider: LLM provider to use ("ollama", "vnpt", or "azure")
         model: Model name (optional, uses default if not provided)
     
@@ -162,6 +184,7 @@ async def run_pipeline(
     # Create pipeline
     pipeline = InferencePipeline(
         llm_service=llm_service,
+        use_agent=use_agent,
         system_prompt=system_prompt
     )
     

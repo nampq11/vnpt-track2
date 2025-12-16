@@ -43,6 +43,12 @@ async def main():
         default=5,
         help="Number of questions to test (for test mode)"
     )
+    parser.add_argument(
+        "--use-agent",
+        action="store_true",
+        default=False,
+        help="Use Agent with task routing (default: False, uses simple prompting)"
+    )
     
     args = parser.parse_args()
     
@@ -62,22 +68,26 @@ async def main():
     
     elif args.mode == "eval":
         # Full evaluation with metrics
-        print(f"Running full evaluation with metrics using {args.provider}...")
+        mode_str = "Agent" if args.use_agent else "Simple"
+        print(f"Running full evaluation ({mode_str} mode) with metrics using {args.provider}...")
         await run_pipeline(
             test_file=args.input,
             output_file=args.output,
             evaluate=True,
+            use_agent=args.use_agent,
             provider=args.provider,
             model=args.model
         )
     
     elif args.mode == "inference":
         # Inference without evaluation
-        print(f"Running inference (no evaluation) using {args.provider}...")
+        mode_str = "Agent" if args.use_agent else "Simple"
+        print(f"Running inference ({mode_str} mode, no evaluation) using {args.provider}...")
         await run_pipeline(
             test_file=args.input,
             output_file=args.output,
             evaluate=False,
+            use_agent=args.use_agent,
             provider=args.provider,
             model=args.model
         )
