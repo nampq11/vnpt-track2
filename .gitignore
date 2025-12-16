@@ -1,1 +1,22 @@
 .env
+__pycache__/
+.ipynb_checkpoints/
+# VSCode
+.vscode/
+# macOS
+.DS_Store
+# Python
+*.pyc
+*.pyo
+*.pyd
+# Jupyter Notebook
+*.ipynb
+# Data
+data/*.json
+# Logs
+*.log
+# Env
+.venv/
+env/
+# uv virtual cache
+.uv
