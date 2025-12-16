@@ -40,8 +40,14 @@ async def main():
     parser.add_argument(
         "--n",
         type=int,
-        default=5,
-        help="Number of questions to test (for test mode)"
+        default=None,
+        help="Number of questions to process (default: all)"
+    )
+    parser.add_argument(
+        "--qids",
+        type=str,
+        default=None,
+        help="Comma-separated list of specific question IDs to process (e.g., 'val_0002,val_0005,val_0010')"
     )
     parser.add_argument(
         "--use-agent",
@@ -58,10 +64,11 @@ async def main():
     
     if args.mode == "test":
         # Quick test on first N questions
-        print(f"Running quick test on first {args.n} questions using {args.provider}...")
+        n_questions = args.n or 5  # Default to 5 for test mode
+        print(f"Running quick test on first {n_questions} questions using {args.provider}...")
         await SimpleInferenceTest.test_first_n_questions(
             file_path=args.input,
-            n=args.n,
+            n=n_questions,
             model=args.model,
             provider=args.provider
         )
@@ -69,6 +76,7 @@ async def main():
     elif args.mode == "eval":
         # Full evaluation with metrics
         mode_str = "Agent" if args.use_agent else "Simple"
+        qids_list = args.qids.split(',') if args.qids else None
         print(f"Running full evaluation ({mode_str} mode) with metrics using {args.provider}...")
         await run_pipeline(
             test_file=args.input,
@@ -76,12 +84,15 @@ async def main():
             evaluate=True,
             use_agent=args.use_agent,
             provider=args.provider,
-            model=args.model
+            model=args.model,
+            n=args.n,
+            qids=qids_list
         )
     
     elif args.mode == "inference":
         # Inference without evaluation
         mode_str = "Agent" if args.use_agent else "Simple"
+        qids_list = args.qids.split(',') if args.qids else None
         print(f"Running inference ({mode_str} mode, no evaluation) using {args.provider}...")
         await run_pipeline(
             test_file=args.input,
@@ -89,7 +100,9 @@ async def main():
             evaluate=False,
             use_agent=args.use_agent,
             provider=args.provider,
-            model=args.model
+            model=args.model,
+            n=args.n,
+            qids=qids_list
         )
 
 

@@ -35,6 +35,7 @@ class Agent:
         start_time = time.time()
 
         try:
+            logger.info(f"Processing query: {query} with options: {options}")
             # --- LAYER 1: FAST SAFE CHECK ---
             try:
                 async with aiohttp.ClientSession() as session:
@@ -56,6 +57,7 @@ class Agent:
                         guardrail_result = await self.guardrail.invoke(
                             user_input=query,
                             embedding=query_embedding,
+                            options=options,  # Pass options for answer generation
                         )
                         logger.info(f"Guardrail Result: {guardrail_result}")
                     else:
@@ -68,9 +70,15 @@ class Agent:
             is_safe, guardrail_answer = guardrail_result
             
             # If guardrail blocked the query, return the safe answer immediately
-            if not is_safe and guardrail_answer:
+            if not is_safe:
                 logger.warning(f"Query blocked by guardrail embedding check")
-                return guardrail_answer
+                # Validate answer is not 'None'
+                if guardrail_answer.get('answer') not in [None, 'None', '']:
+                    return guardrail_answer
+                else:
+                    # Fallback to first option if guardrail couldn't determine answer
+                    logger.warning(f"Guardrail returned invalid answer, using fallback")
+                    return {"answer": sorted(options.keys())[0]}
             
             # --- LAYER 2: QUERY CLASSIFICATION ---
             classification = await self.query_classification.invoke(

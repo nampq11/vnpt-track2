@@ -57,16 +57,20 @@ class MathTask(BaseTask):
         options: Dict[str, str],
     ) -> Dict[str, str]:
         try:
+            logger.debug(f"Math Task invoked with query: {query[:50]}... and {len(options)} options")
             choices_str = self._format_choices(options)
             prompt = MATH_PROMPT.format(
                 query=query,
                 choices=choices_str,
             )
+            logger.debug(f"Math Task calling LLM with prompt length: {len(prompt)}")
             response_text = await self.llm_service.generate(
                 user_input=prompt,
             )
             logger.debug(f"Math Task LLM response: {response_text}")
-            return self._parse_json_answer(response_text, options)
+            result = self._parse_json_answer(response_text, options)
+            logger.debug(f"Math Task parsed result: {result}")
+            return result
         except Exception as e:
             logger.error(f"Error invoking Math Task: {e}")
             return {"answer": "A"}

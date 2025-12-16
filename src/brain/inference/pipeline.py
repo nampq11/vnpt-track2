@@ -142,6 +142,8 @@ async def run_pipeline(
     system_prompt: Optional[str] = None,
     provider: Literal["ollama", "vnpt", "azure"] = "ollama",
     model: Optional[str] = None,
+    n: Optional[int] = None,
+    qids: Optional[List[str]] = None,
 ) -> Optional[EvaluationMetrics]:
     """
     Run complete inference pipeline
@@ -154,6 +156,8 @@ async def run_pipeline(
         system_prompt: Custom system prompt (only used when use_agent=False)
         provider: LLM provider to use ("ollama", "vnpt", or "azure")
         model: Model name (optional, uses default if not provided)
+        n: Number of questions to process (optional, processes all if not provided)
+        qids: List of specific question IDs to process (optional, processes all if not provided)
     
     Returns:
         EvaluationMetrics if evaluate=True, else None
@@ -190,8 +194,25 @@ async def run_pipeline(
     
     # Load questions
     print(f"Loading questions from {test_file}...")
-    questions = pipeline.processor.load_questions(test_file)
-    print(f"✓ Loaded {len(questions)} questions from '{dataset_name}'")
+    all_questions = pipeline.processor.load_questions(test_file)
+    total_count = len(all_questions)
+    
+    # Filter by specific QIDs if provided
+    if qids is not None and len(qids) > 0:
+        # Filter questions by QID
+        qid_set = set(qids)
+        questions = [q for q in all_questions if q.qid in qid_set]
+        if len(questions) == 0:
+            print(f"⚠️  Warning: No questions found with specified QIDs: {qids}")
+            return None
+        print(f"✓ Loaded {len(questions)} questions from '{dataset_name}' (filtered by QIDs: {', '.join(qids)})")
+    # Otherwise limit to first n questions if specified
+    elif n is not None and n > 0:
+        questions = all_questions[:n]
+        print(f"✓ Loaded {len(questions)} questions from '{dataset_name}' (limited from {total_count})")
+    else:
+        questions = all_questions
+        print(f"✓ Loaded {len(questions)} questions from '{dataset_name}'")
     print(f"  Output file: {output_file}\n")
     
     # Run inference
