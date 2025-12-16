@@ -15,57 +15,118 @@ DATASET="${2:-test}"
 OUTPUT_FORMAT="${3:-json}"  # json or csv
 PROVIDER="${4:-vnpt}"       # ollama, vnpt, or azure
 MODEL="${5:-}"              # optional model override
+USE_AGENT="${6:-}"          # optional: --use-agent flag
 
 INPUT_FILE="data/${DATASET}.json"
 OUTPUT_DIR="results"
 OUTPUT_EXT="${OUTPUT_FORMAT}"
-OUTPUT_FILE="${OUTPUT_DIR}/predictions_${DATASET}.${OUTPUT_EXT}"
+
+# Add suffix for agent mode in filename
+if [ "$USE_AGENT" = "--use-agent" ]; then
+    OUTPUT_FILE="${OUTPUT_DIR}/predictions_${DATASET}_agent.${OUTPUT_EXT}"
+else
+    OUTPUT_FILE="${OUTPUT_DIR}/predictions_${DATASET}.${OUTPUT_EXT}"
+fi
 
 # Create output directory
 mkdir -p "$OUTPUT_DIR"
 
 case "$MODE" in
     test)
-        echo "🧪 Running quick test on 5 questions with $PROVIDER..."
-        if [ -n "$MODEL" ]; then
-            uv run python predict.py --mode test --input "$INPUT_FILE" --provider "$PROVIDER" --model "$MODEL" --n 5
-        else
-            uv run python predict.py --mode test --input "$INPUT_FILE" --provider "$PROVIDER" --n 5
+        MODE_DISPLAY="Simple"
+        if [ "$USE_AGENT" = "--use-agent" ]; then
+            MODE_DISPLAY="Agent"
         fi
+        echo "🧪 Running quick test on 5 questions with $PROVIDER ($MODE_DISPLAY mode)..."
+        
+        CMD="uv run python predict.py --mode test --input \"$INPUT_FILE\" --provider \"$PROVIDER\" --n 5"
+        if [ -n "$MODEL" ]; then
+            CMD="$CMD --model \"$MODEL\""
+        fi
+        if [ "$USE_AGENT" = "--use-agent" ]; then
+            CMD="$CMD --use-agent"
+        fi
+        eval $CMD
         ;;
     eval)
-        echo "📊 Running full evaluation on $DATASET.json (output: $OUTPUT_FORMAT) with $PROVIDER..."
-        if [ -n "$MODEL" ]; then
-            uv run python predict.py --mode eval --input "$INPUT_FILE" --output "$OUTPUT_FILE" --provider "$PROVIDER" --model "$MODEL"
-        else
-            uv run python predict.py --mode eval --input "$INPUT_FILE" --output "$OUTPUT_FILE" --provider "$PROVIDER"
+        MODE_DISPLAY="Simple"
+        if [ "$USE_AGENT" = "--use-agent" ]; then
+            MODE_DISPLAY="Agent"
         fi
+        echo "📊 Running full evaluation on $DATASET.json (output: $OUTPUT_FORMAT) with $PROVIDER ($MODE_DISPLAY mode)..."
+        
+        CMD="uv run python predict.py --mode eval --input \"$INPUT_FILE\" --output \"$OUTPUT_FILE\" --provider \"$PROVIDER\""
+        if [ -n "$MODEL" ]; then
+            CMD="$CMD --model \"$MODEL\""
+        fi
+        if [ "$USE_AGENT" = "--use-agent" ]; then
+            CMD="$CMD --use-agent"
+        fi
+        eval $CMD
         ;;
     inference)
-        echo "🚀 Running inference on $DATASET.json (output: $OUTPUT_FORMAT) with $PROVIDER..."
-        if [ -n "$MODEL" ]; then
-            uv run python predict.py --mode inference --input "$INPUT_FILE" --output "$OUTPUT_FILE" --provider "$PROVIDER" --model "$MODEL"
-        else
-            uv run python predict.py --mode inference --input "$INPUT_FILE" --output "$OUTPUT_FILE" --provider "$PROVIDER"
+        MODE_DISPLAY="Simple"
+        if [ "$USE_AGENT" = "--use-agent" ]; then
+            MODE_DISPLAY="Agent"
         fi
+        echo "🚀 Running inference on $DATASET.json (output: $OUTPUT_FORMAT) with $PROVIDER ($MODE_DISPLAY mode)..."
+        
+        CMD="uv run python predict.py --mode inference --input \"$INPUT_FILE\" --output \"$OUTPUT_FILE\" --provider \"$PROVIDER\""
+        if [ -n "$MODEL" ]; then
+            CMD="$CMD --model \"$MODEL\""
+        fi
+        if [ "$USE_AGENT" = "--use-agent" ]; then
+            CMD="$CMD --use-agent"
+        fi
+        eval $CMD
         ;;
     *)
         echo "❌ Unknown mode: $MODE"
         echo ""
-        echo "Usage:"
-        echo "  $0 test [dataset] [format] [provider] [model]      # Quick test"
-        echo "  $0 eval [dataset] [format] [provider] [model]      # Full evaluation"
-        echo "  $0 inference [dataset] [format] [provider] [model] # Inference only"
+        echo "═══════════════════════════════════════════════════════════════"
+        echo "VNPT Track 2 - Inference Pipeline Runner"
+        echo "═══════════════════════════════════════════════════════════════"
         echo ""
-        echo "Supported formats: json (default), csv"
-        echo "Supported providers: vnpt (default), azure, ollama"
+        echo "Usage:"
+        echo "  $0 MODE [DATASET] [FORMAT] [PROVIDER] [MODEL] [--use-agent]"
+        echo ""
+        echo "Modes:"
+        echo "  test        Quick test on first 5 questions"
+        echo "  eval        Full evaluation with metrics"
+        echo "  inference   Inference only (no metrics)"
+        echo ""
+        echo "Arguments:"
+        echo "  DATASET     Dataset name (default: test)"
+        echo "              Available: test, val"
+        echo "  FORMAT      Output format (default: json)"
+        echo "              Available: json, csv"
+        echo "  PROVIDER    LLM provider (default: vnpt)"
+        echo "              Available: vnpt, azure, ollama"
+        echo "  MODEL       Model name override (optional)"
+        echo "  --use-agent Enable agent pipeline with task routing (optional)"
+        echo "              Default: simple prompting mode"
         echo ""
         echo "Examples:"
-        echo "  $0 test                                # Test on data/test.json (VNPT)"
-        echo "  $0 eval val                           # Eval on data/val.json (VNPT, JSON)"
-        echo "  $0 eval val csv azure                 # Eval on val.json with Azure (CSV)"
-        echo "  $0 eval test json azure gpt-4.1       # Eval with Azure GPT-4.1"
-        echo "  $0 inference test csv ollama qwen3:1.7b # Inference with Ollama"
+        echo ""
+        echo "  Basic Usage:"
+        echo "  $0 test                                      # Quick test (simple mode)"
+        echo "  $0 eval val                                 # Full eval on val.json"
+        echo "  $0 eval val csv azure                       # Val, CSV, Azure"
+        echo ""
+        echo "  With Agent Mode:"
+        echo "  $0 test test json azure \"\" --use-agent      # Test with agent"
+        echo "  $0 eval val csv azure \"\" --use-agent        # Eval with agent"
+        echo "  $0 eval val csv azure gpt-4o --use-agent    # With model & agent"
+        echo ""
+        echo "  Output files:"
+        echo "  • Simple mode: predictions_val.csv"
+        echo "  • Agent mode:  predictions_val_agent.csv"
+        echo ""
+        echo "═══════════════════════════════════════════════════════════════"
+        echo "TIP: For more flexibility (--qids, --n, --no-agent option),"
+        echo "     use the eval.sh script:"
+        echo "     ./bin/eval.sh --help"
+        echo "═══════════════════════════════════════════════════════════════"
         exit 1
         ;;
 esac
