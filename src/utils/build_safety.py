@@ -13,6 +13,7 @@ from typing import List
 from loguru import logger
 from src.brain.llm.services.vnpt import VNPTService
 from src.brain.llm.services.ollama import OllamaService
+from src.brain.llm.services.azure import AzureService
 from src.brain.llm.services.type import LLMService
 
 BAD_INTENT_SEEDS = [
@@ -79,9 +80,23 @@ async def build_safety_index(llm_provider: LLMService):
                 text=query,
             ) for query in target_queries
         ]
-        results = await asyncio.gather(*tasks)
-        for q, vec in zip(target_queries, results):
-            if vec is not None:
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for q, result in zip(target_queries, results):
+            if isinstance(result, Exception):
+                logger.warning(f"Failed to get embedding for '{q[:50]}...': {result}")
+                continue
+            
+            # Handle different response formats
+            vec = None
+            if isinstance(result, dict):
+                # VNPT format: {'data': [{'embedding': [...]}]}
+                if 'data' in result and len(result['data']) > 0:
+                    vec = result['data'][0].get('embedding')
+            elif isinstance(result, list):
+                # Azure/Ollama format: direct list
+                vec = result
+            
+            if vec is not None and len(vec) > 0:
                 embeddings.append(vec)
                 valid_queries.append(q)
 
@@ -100,5 +115,37 @@ async def build_safety_index(llm_provider: LLMService):
     logger.info(f"Đã lưu {len(valid_queries)} queries vào file safety_queries.json")
 
 if __name__ == "__main__":
-    llm_provider = OllamaService()
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Build safety index with embeddings")
+    parser.add_argument(
+        "--provider",
+        choices=["ollama", "vnpt", "azure"],
+        default="ollama",
+        help="LLM provider to use for embeddings (default: ollama)"
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="Model name (optional, uses provider default)"
+    )
+    args = parser.parse_args()
+    
+    # Initialize provider
+    if args.provider == "vnpt":
+        logger.info("Using VNPT service for embeddings")
+        llm_provider = VNPTService(
+            model_type="embedding"
+        )
+    elif args.provider == "azure":
+        logger.info("Using Azure service for embeddings")
+        llm_provider = AzureService(
+            embedding_model=args.model or "text-embedding-ada-002"
+        )
+    else:  # ollama
+        logger.info("Using Ollama service for embeddings")
+        llm_provider = OllamaService(
+            model=args.model or "nomic-embed-text"
+        )
+    
     asyncio.run(build_safety_index(llm_provider))
