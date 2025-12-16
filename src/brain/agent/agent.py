@@ -44,33 +44,54 @@ class Agent:
                     )
                     # Extract embedding vector from response
                     # VNPT API returns dict with 'data' containing embeddings
+                    # Azure returns direct list
                     if isinstance(embedding_response, dict) and 'data' in embedding_response:
                         query_embedding = embedding_response['data'][0]['embedding']
-                    else:
+                    elif isinstance(embedding_response, list):
                         query_embedding = embedding_response
+                    else:
+                        query_embedding = None
                     
-                    guardrail_result = await self.guardrail.invoke(
-                        user_input=query,
-                        embedding=query_embedding,
-                    )
-                    logger.info(f"Guardrail Result: {guardrail_result}")
+                    if query_embedding is not None:
+                        guardrail_result = await self.guardrail.invoke(
+                            user_input=query,
+                            embedding=query_embedding,
+                        )
+                        logger.info(f"Guardrail Result: {guardrail_result}")
+                    else:
+                        guardrail_result = (True, {})
             except Exception as e:
                 logger.warning(f"Guardrail check failed (non-blocking): {e}")
                 guardrail_result = (True, {})
+            
+            # Check if guardrail detected unsafe content
+            is_safe, guardrail_answer = guardrail_result
+            
             # --- LAYER 2: QUERY CLASSIFICATION ---
-            classification = await self.query_classification.invoke(
-                query=query,
-            )
-            logger.info(f"Query Classification Result: {classification}")
+            # Only classify if guardrail passed (is_safe=True and answer is empty {})
+            if is_safe:
+                classification = await self.query_classification.invoke(
+                    query=query,
+                )
+                logger.info(f"Query Classification Result: {classification}")
+            else:
+                # Guardrail blocked, treat as SAFETY category
+                logger.warning(f"Query blocked by guardrail similarity check")
+                classification = {'category': ScenarioTask.SAFETY}
 
             # --- LAYER 3: EXECUTION ---
             if classification['category'] == ScenarioTask.SAFETY:
-                result = await self.guardrail.invoke(
+                # For safety category, call guardrail to get safe answer
+                is_safe_check, safe_answer = await self.guardrail.invoke(
                     user_input=query,
                     is_safe=False,
                     options=options,
                 )
-                return result
+                # Guardrail returns (is_safe, answer), convert to dict
+                if isinstance(safe_answer, dict):
+                    result = safe_answer
+                else:
+                    result = {"answer": safe_answer if safe_answer else sorted(options.keys())[0]}
             elif classification['category'] == ScenarioTask.MATH:
                 result = await self.math_task.invoke(
                     query=query,
@@ -92,6 +113,8 @@ class Agent:
                 result = {
                     "answer": "A",
                 }
+            
+            logger.debug(f"Task execution result: {result}")
             return result
                 
         except Exception as e:

@@ -57,7 +57,7 @@ class GuardrailService:
         is_safe: Optional[bool] = None,
         embedding: Optional[List[float]] = None,
         options: Optional[Dict[str, str]] = None,
-    ) -> Tuple[bool, str]:
+    ) -> Tuple[bool, Dict[str, str]]:
         try:
             violation_reason = None
             matched_query = None
@@ -65,57 +65,74 @@ class GuardrailService:
             # Check embedding safety if available
             if embedding is not None:
                 # Convert embedding to numpy array of floats
-                embedding_array = np.array(embedding, dtype='float32')                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
-                scores = np.dot(self.safety_index, embedding_array)
-                max_score = float(np.max(scores))
-                violation_reason = f"Similarity {max_score:.2f}"
-                logger.info(f"violation reason: {violation_reason}")                                                                                                                                                                                                                                                                                                                                                                                    
-                if max_score > self.safety_threshold:
-                    max_score_idx = int(np.argmax(scores))
-                    matched_query = self.safety_queries[max_score_idx]
-                    logger.info(f"matched safety query: {matched_query}")
-                    is_safe = False
-                else:
+                embedding_array = np.array(embedding, dtype='float32')
+                
+                # Validate dimensions
+                if embedding_array.shape[0] != self.safety_index.shape[1]:
+                    logger.warning(f"Embedding dimension mismatch: {embedding_array.shape[0]} != {self.safety_index.shape[1]}")
                     is_safe = True
+                else:
+                    # Normalize embedding for proper cosine similarity
+                    norm = np.linalg.norm(embedding_array)
+                    if norm > 0:
+                        embedding_array = embedding_array / norm
+                    
+                    scores = np.dot(self.safety_index, embedding_array)
+                    max_score = float(np.max(scores))
+                    violation_reason = f"Similarity {max_score:.2f}"
+                    logger.info(f"violation reason: {violation_reason}")
+                    
+                    if max_score > self.safety_threshold:
+                        max_score_idx = int(np.argmax(scores))
+                        matched_query = self.safety_queries[max_score_idx]
+                        logger.info(f"matched safety query: {matched_query}")
+                        is_safe = False
+                    else:
+                        is_safe = True
 
-            # If no violation or no embedding, proceed with LLM check
+            # If violation detected, call LLM to get safe answer
             if user_input is not None and not is_safe:
                 prompt = SAFETY_SELECTOR_PROMPT.format(
                     query=user_input,
                     violation_reason=violation_reason or "None",
-                    options=options                                                                                                                                                                           
+                    options=options
                 )
                 try:
                     response_text = await self.llm_service.generate(
                         user_input=prompt,
                     )
 
-                    result =  self._parse_json_answer_robust(options, response_text)
+                    result = self._parse_json_answer_robust(options, response_text)
                     logger.info(f"Guardrail Service Result: {result}")
                     return is_safe, result
                 except Exception as e:
                     logger.error(f"Error invoking Guardrail Service: {e}")
-                    return is_safe, "Error parsing JSON answer"
+                    return is_safe, {}
             
-            return is_safe, "No checks performed"
+            # No violation detected, return empty dict
+            return is_safe, {}
         except Exception as e:
             logger.error(f"Error invoking Guardrail Service: {e}")
             raise e
 
     def _parse_json_answer_robust(
         self,
-        options: Dict[str, str],
+        options: Optional[Dict[str, str]],
         text: str
-    ) -> Tuple[bool, str]:
+    ) -> Dict[str, str]:
+        """Parse JSON answer from LLM response and return as dict"""
         try:
             match = re.search(r'\{.*\}', text, re.DOTALL)
-            logger.info(
-                f"Parsing JSON answer: {text} with options: {options}"
-            )
+            logger.info(f"Parsing JSON answer: {text} with options: {options}")
+            
             if match:
                 data = json.loads(match.group())
-                return True, data["answer"]
+                answer = data.get("answer", "None")
+                return {"answer": answer}
         except Exception as e:
             logger.error(f"Error parsing JSON answer: {e}")
-            return False, str(e)
-        return False, "No JSON found in response"
+        
+        # Fallback: return first option if available
+        if options:
+            return {"answer": sorted(options.keys())[0]}
+        return {"answer": "A"}
