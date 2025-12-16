@@ -1,7 +1,9 @@
 from typing import Optional
 from src.brain.llm.services.type import LLMService, LLMServiceConfig
 from openai import OpenAI
-
+import aiohttp
+import ollama
+from typing import List
 
 class OllamaServiceConfig(LLMServiceConfig):
     def __init__(self, model: str = "qwen3:1.7b"):
@@ -49,6 +51,18 @@ class OllamaService(LLMService):
         except Exception as e:
             raise RuntimeError(f"Error generating response from Ollama: {str(e)}")
     
+    async def get_embedding(self, session: aiohttp.ClientSession, text: str) -> List[float]:
+        try:
+            response = ollama.embed(
+                model="nomic-embed-text",
+                input=text,
+            )
+            # Return the first (and only) embedding from the response
+            embeddings = response['embeddings']
+            return embeddings[0] if embeddings else []
+        except Exception as e:
+            raise RuntimeError(f"Error getting embedding from Ollama: {str(e)}")
+
     def get_all_tools(self):
         """Return available tools"""
         return {}

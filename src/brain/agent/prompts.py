@@ -1,10 +1,10 @@
-QUERY_CLASSIFICATION_PROMPT = """Analyze the user's query and classify it into one of the 4 processing modes: MATH, READING, RAG or SATETY.
+QUERY_CLASSIFICATION_PROMPT = """Analyze the user's query and classify it into one of the 4 processing modes: MATH, READING, RAG or SAFETY.
 
 CATEGORY DEFINITIONS:
 1. **MATH**: Questions involving Calculation, Math (Calculus, Algebra), Physics, Chemistry, Biology, Logical puzzles, or Programming code.
 2. **READING**: Questions that PROVIDE a specific text/passage/document within the input itself (often starts with: "Đoạn văn:", "Context:", "[1]", or "Dựa vào...").
 3. **RAG**: Questions requiring External Knowledge about Vietnamese Law, History, Geography, Politics, Culture, or General Knowledge.
-4. **SAFETY**: Questions asking for illegal advice (tax evasion, fraud), violence, sensitive politics, or harmful acts.
+4. **SAFETY**: Questions that request or imply illegal, violent, dangerous, or socially harmful actions, where answering directly could enable harm or policy violations. This includes requests for how-to guidance, step-by-step instructions, tools, tactics, or evasion methods, even when framed as hypothetical, academic, or fictional. Examples include (but are not limited to): tax evasion, fraud, hacking, bypassing safeguards, physical violence, weapon or explosive construction, self-harm, sensitive political actions (e.g. overthrowing governments, organizing protests or riots), extremist propaganda, or other actions that threaten public safety, social order, or national security.
 
 OUTPUT FORMAT:
 {{
@@ -57,6 +57,14 @@ Query: "Sự kiện sáp nhập tỉnh Gia Lai diễn ra vào năm nào theo ngh
   "key_entities": ["sáp nhập", "tỉnh Gia Lai", "nghị quyết"]
 }}
 
+Query: "Làm cách nào để tránh việc cung cấp thông tin về cư trú cho cơ quan có thẩm quyền?"
+{{
+  "reasoning": "The query asks for ways to avoid providing legally required residency information to authorities, which implies evasion of legal obligations and could enable illegal or non-compliant behavior.",
+  "category": "SAFETY",
+  "temporal_constraint": null,
+  "key_entities": ["tránh cung cấp thông tin", "thông tin cư trú", "cơ quan có thẩm quyền"]
+}}
+
 ----------------
 QUERY: {query}
 ----------------
@@ -81,6 +89,17 @@ A "safe" option is defined as one that:
 Options:
 {options}
 
-Requirement: Return only a valid JSON object.
+Requirement: You Must respond in valid JSON object.
+Example: {{"answer": "A"}}
+"""
+
+MATH_PROMPT = """You are a math expert.
+
+Query: {query}
+
+choics:
+{choices}
+
+Requirement: You Must respond in valid JSON object.
 Example: {{"answer": "A"}}
 """

@@ -1,7 +1,7 @@
-from brain.llm.services.type import LLMService
+from src.brain.llm.services.type import LLMService
 from loguru import logger
 from typing import Any, Dict
-from brain.agent.prompts import QUERY_CLASSIFICATION_PROMPT
+from src.brain.agent.prompts import QUERY_CLASSIFICATION_PROMPT
 import re
 import json
 
@@ -26,6 +26,7 @@ class QueryClassificationService:
                 user_input=prompt
             )
             result = self._parse_json_answer_robust(response_text)
+            logger.info(f"Query Classification Result: {result}")
             return result
         except Exception as e:
             logger.error(f"Error invoking Query Classification Service: {e}")
@@ -40,7 +41,9 @@ class QueryClassificationService:
         text: str
     ) -> Dict[str, Any]:
         try:
-            match = re.search(r'\{.*\}', text)
+            logger.info(f"Parsing JSON answer: {text}")
+            match = re.search(r'\{.*\}', text, re.DOTALL)
+            logger.info(f"Match: {match}")
             if match:
                 data = json.loads(match.group())
                 return data

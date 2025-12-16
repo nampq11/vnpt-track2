@@ -12,6 +12,7 @@ import aiohttp
 from typing import List
 from loguru import logger
 from src.brain.llm.services.vnpt import VNPTService
+from src.brain.llm.services.ollama import OllamaService
 from src.brain.llm.services.type import LLMService
 
 BAD_INTENT_SEEDS = [
@@ -79,10 +80,9 @@ async def build_safety_index(llm_provider: LLMService):
             ) for query in target_queries
         ]
         results = await asyncio.gather(*tasks)
-
         for q, vec in zip(target_queries, results):
             if vec is not None:
-                embeddings.append(vec['data'][0]['embedding'])
+                embeddings.append(vec)
                 valid_queries.append(q)
 
     safety_matrix = np.array(embeddings, dtype='float32')
@@ -100,5 +100,5 @@ async def build_safety_index(llm_provider: LLMService):
     logger.info(f"Đã lưu {len(valid_queries)} queries vào file safety_queries.json")
 
 if __name__ == "__main__":
-    llm_provider = VNPTService()
+    llm_provider = OllamaService()
     asyncio.run(build_safety_index(llm_provider))
