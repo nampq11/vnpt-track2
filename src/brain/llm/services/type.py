@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from optparse import Option
 from token import OP
+import aiohttp
 from typing import Any, Dict, List, Optional
 
 Tool_Set = Dict[str, Any]
@@ -20,6 +21,14 @@ class LLMService(ABC):
         user_input: str,
         stream: Optional[bool] = False,
     ) -> str:
+        pass
+
+    @abstractmethod
+    async def get_embedding(
+        self,
+        session: aiohttp.ClientSession,
+        text: str,
+    ) -> List[float]:
         pass
 
     @abstractmethod
