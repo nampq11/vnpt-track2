@@ -12,12 +12,18 @@ class MathTask(BaseTask):
         self,
         llm_service: LLMService,
     ) -> None:
-        # Create dedicated large model service for math reasoning
-        self.llm_service = VNPTService(
-            model="vnptai-hackathon-large",
-            model_type="large",
-        )
-        logger.info("Initialized Math Task with large model")
+        # Use provided LLM service or fallback to VNPT large model
+        if isinstance(llm_service, VNPTService):
+            # If VNPT, use large model for better reasoning
+            self.llm_service = VNPTService(
+                model="vnptai-hackathon-large",
+                model_type="large",
+            )
+            logger.info("Initialized Math Task with VNPT large model")
+        else:
+            # Use provided service (Azure, Ollama, etc.)
+            self.llm_service = llm_service
+            logger.info(f"Initialized Math Task with {llm_service.__class__.__name__}")
 
     def _format_choices(self, options: Dict[str, str]) -> str:
         """Format choices for prompt."""
@@ -38,11 +44,12 @@ class MathTask(BaseTask):
         
         # Fallback: find first valid option letter
         text_upper = text.upper()
-        for letter in ["A", "B", "C", "D"]:
-            if letter in options and f'"{letter}"' in text_upper:
+        for letter in sorted(options.keys()):
+            if f'"{letter}"' in text_upper or f"'{letter}'" in text_upper:
                 return {"answer": letter}
         
-        return {"answer": "A"}
+        # Last resort: return first option
+        return {"answer": sorted(options.keys())[0]}
 
     async def invoke(
         self,
