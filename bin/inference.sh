@@ -6,12 +6,15 @@
 #   ./bin/inference.sh eval          # Full evaluation on test.json (JSON output)
 #   ./bin/inference.sh eval val      # Full evaluation on val.json (JSON output)
 #   ./bin/inference.sh eval test csv # Full evaluation on test.json (CSV output)
+#   ./bin/inference.sh eval test csv vnpt  # Full evaluation with VNPT provider
+#   ./bin/inference.sh eval test csv azure # Full evaluation with Azure provider
 #   ./bin/inference.sh inference     # Inference only (no metrics)
 
 MODE="${1:-test}"
 DATASET="${2:-test}"
-MODEL="${3:-qwen3:1.7b}"
-OUTPUT_FORMAT="${4:-json}"  # json or csv
+OUTPUT_FORMAT="${3:-json}"  # json or csv
+PROVIDER="${4:-vnpt}"       # ollama, vnpt, or azure
+MODEL="${5:-}"              # optional model override
 
 INPUT_FILE="data/${DATASET}.json"
 OUTPUT_DIR="results"
@@ -23,32 +26,46 @@ mkdir -p "$OUTPUT_DIR"
 
 case "$MODE" in
     test)
-        echo "🧪 Running quick test on 5 questions..."
-        uv run python predict.py --mode test --input "$INPUT_FILE" --model "$MODEL" --n 5
+        echo "🧪 Running quick test on 5 questions with $PROVIDER..."
+        if [ -n "$MODEL" ]; then
+            uv run python predict.py --mode test --input "$INPUT_FILE" --provider "$PROVIDER" --model "$MODEL" --n 5
+        else
+            uv run python predict.py --mode test --input "$INPUT_FILE" --provider "$PROVIDER" --n 5
+        fi
         ;;
     eval)
-        echo "📊 Running full evaluation on $DATASET.json (output: $OUTPUT_FORMAT)..."
-        uv run python predict.py --mode eval --input "$INPUT_FILE" --output "$OUTPUT_FILE" --model "$MODEL"
+        echo "📊 Running full evaluation on $DATASET.json (output: $OUTPUT_FORMAT) with $PROVIDER..."
+        if [ -n "$MODEL" ]; then
+            uv run python predict.py --mode eval --input "$INPUT_FILE" --output "$OUTPUT_FILE" --provider "$PROVIDER" --model "$MODEL"
+        else
+            uv run python predict.py --mode eval --input "$INPUT_FILE" --output "$OUTPUT_FILE" --provider "$PROVIDER"
+        fi
         ;;
     inference)
-        echo "🚀 Running inference on $DATASET.json (output: $OUTPUT_FORMAT)..."
-        uv run python predict.py --mode inference --input "$INPUT_FILE" --output "$OUTPUT_FILE" --model "$MODEL"
+        echo "🚀 Running inference on $DATASET.json (output: $OUTPUT_FORMAT) with $PROVIDER..."
+        if [ -n "$MODEL" ]; then
+            uv run python predict.py --mode inference --input "$INPUT_FILE" --output "$OUTPUT_FILE" --provider "$PROVIDER" --model "$MODEL"
+        else
+            uv run python predict.py --mode inference --input "$INPUT_FILE" --output "$OUTPUT_FILE" --provider "$PROVIDER"
+        fi
         ;;
     *)
         echo "❌ Unknown mode: $MODE"
         echo ""
         echo "Usage:"
-        echo "  $0 test [dataset] [model] [format]      # Quick test"
-        echo "  $0 eval [dataset] [model] [format]      # Full evaluation"
-        echo "  $0 inference [dataset] [model] [format]  # Inference only"
+        echo "  $0 test [dataset] [format] [provider] [model]      # Quick test"
+        echo "  $0 eval [dataset] [format] [provider] [model]      # Full evaluation"
+        echo "  $0 inference [dataset] [format] [provider] [model] # Inference only"
         echo ""
         echo "Supported formats: json (default), csv"
+        echo "Supported providers: vnpt (default), azure, ollama"
         echo ""
         echo "Examples:"
-        echo "  $0 test                           # Test on data/test.json"
-        echo "  $0 eval val                      # Eval on data/val.json (JSON)"
-        echo "  $0 eval test qwen3:1.7b csv     # Eval with CSV output"
-        echo "  $0 inference test qwen3:1.7b csv # Inference with CSV output"
+        echo "  $0 test                                # Test on data/test.json (VNPT)"
+        echo "  $0 eval val                           # Eval on data/val.json (VNPT, JSON)"
+        echo "  $0 eval val csv azure                 # Eval on val.json with Azure (CSV)"
+        echo "  $0 eval test json azure gpt-4.1       # Eval with Azure GPT-4.1"
+        echo "  $0 inference test csv ollama qwen3:1.7b # Inference with Ollama"
         exit 1
         ;;
 esac
