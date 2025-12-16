@@ -36,15 +36,27 @@ class Agent:
 
         try:
             # --- LAYER 1: FAST SAFE CHECK ---
-            async with aiohttp.ClientSession() as session:
-                query_embedding = await self.llm_service.get_embedding(
-                    session=session,
-                    text=query,
-                )
-                guardrail_result = await self.guardrail.invoke(
-                    embedding=query_embedding,
-                )
-                logger.info(f"Guardrail Result: {guardrail_result}")
+            try:
+                async with aiohttp.ClientSession() as session:
+                    embedding_response = await self.llm_service.get_embedding(
+                        session=session,
+                        text=query,
+                    )
+                    # Extract embedding vector from response
+                    # VNPT API returns dict with 'data' containing embeddings
+                    if isinstance(embedding_response, dict) and 'data' in embedding_response:
+                        query_embedding = embedding_response['data'][0]['embedding']
+                    else:
+                        query_embedding = embedding_response
+                    
+                    guardrail_result = await self.guardrail.invoke(
+                        user_input=query,
+                        embedding=query_embedding,
+                    )
+                    logger.info(f"Guardrail Result: {guardrail_result}")
+            except Exception as e:
+                logger.warning(f"Guardrail check failed (non-blocking): {e}")
+                guardrail_result = (True, {})
             # --- LAYER 2: QUERY CLASSIFICATION ---
             classification = await self.query_classification.invoke(
                 query=query,

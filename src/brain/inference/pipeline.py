@@ -1,5 +1,6 @@
 """Main inference pipeline for question answering"""
 import asyncio
+import csv
 from typing import List, Optional, Dict
 from dataclasses import asdict
 import json
@@ -78,18 +79,36 @@ Cuối cùng, cho biết rõ ràng đáp án bạn chọn (A, B, C hoặc D)."""
         
         return predictions
     
+    def save_predictions_csv(
+        self,
+        predictions: List[PredictionResult],
+        output_file: str
+    ) -> None:
+        """Save predictions to CSV file with qid,answer header"""
+        with open(output_file, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['qid', 'answer'])
+            for pred in predictions:
+                writer.writerow([pred.qid, pred.predicted_answer])
+        
+        print(f"\nPredictions saved to {output_file}")
+
     def save_predictions(
         self,
         predictions: List[PredictionResult],
         output_file: str
     ) -> None:
-        """Save predictions to JSON file"""
-        data = [asdict(pred) for pred in predictions]
-        
-        with open(output_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        
-        print(f"\nPredictions saved to {output_file}")
+        """Save predictions to JSON or CSV file (auto-detect by extension)"""
+        if output_file.endswith('.csv'):
+            self.save_predictions_csv(predictions, output_file)
+        else:
+            # Default to JSON format
+            data = [asdict(pred) for pred in predictions]
+            
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            
+            print(f"\nPredictions saved to {output_file}")
 
 
 async def run_pipeline(
@@ -110,6 +129,10 @@ async def run_pipeline(
     Returns:
         EvaluationMetrics if evaluate=True, else None
     """
+    # Extract dataset name from file path
+    from pathlib import Path
+    dataset_name = Path(test_file).stem
+    
     # Initialize Ollama service
     llm_service = OllamaService(
         base_url="http://localhost:11434/v1",
@@ -126,7 +149,8 @@ async def run_pipeline(
     # Load questions
     print(f"Loading questions from {test_file}...")
     questions = pipeline.processor.load_questions(test_file)
-    print(f"Loaded {len(questions)} questions\n")
+    print(f"✓ Loaded {len(questions)} questions from '{dataset_name}'")
+    print(f"  Output file: {output_file}\n")
     
     # Run inference
     print("Starting inference...")
@@ -148,8 +172,12 @@ async def run_pipeline(
         ]
         
         metrics = Evaluator.evaluate(pred_dicts, ground_truth)
-        Evaluator.print_summary(metrics)
-        Evaluator.save_results(metrics, output_file.replace('.json', '_metrics.json'))
+        Evaluator.print_summary(metrics, dataset_name=dataset_name)
+        
+        # Save detailed metrics
+        metrics_file = output_file.replace('.json', '_metrics.json').replace('.csv', '_metrics.json')
+        Evaluator.save_results(metrics, metrics_file)
+        print(f"✓ Metrics saved to {metrics_file}")
         
         return metrics
     

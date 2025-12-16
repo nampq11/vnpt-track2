@@ -20,6 +20,7 @@ src/brain/
 └── config.py       # Configuration classes
 data/               # QA datasets (val.json, test.json)
 config/             # API credentials (vnpt.json)
+tests/              # Integration tests
 ```
 
 ## Quick Commands

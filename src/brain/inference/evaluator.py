@@ -59,16 +59,29 @@ class Evaluator:
         )
     
     @staticmethod
-    def print_summary(metrics: EvaluationMetrics) -> None:
-        """Print evaluation summary"""
-        print(f"\n{'='*50}")
-        print(f"EVALUATION RESULTS")
-        print(f"{'='*50}")
-        print(f"Total Questions: {metrics.total_questions}")
-        print(f"Correct Answers: {metrics.correct_answers}")
-        print(f"Incorrect Answers: {metrics.incorrect_answers}")
-        print(f"Accuracy: {metrics.accuracy:.2%}")
-        print(f"{'='*50}\n")
+    def print_summary(metrics: EvaluationMetrics, dataset_name: str = None) -> None:
+        """Print evaluation summary with detailed logging"""
+        dataset_info = f" ({dataset_name})" if dataset_name else ""
+        
+        print(f"\n{'='*70}")
+        print(f"📊 EVALUATION RESULTS{dataset_info}")
+        print(f"{'='*70}")
+        print(f"  Total Questions:    {metrics.total_questions}")
+        print(f"  Correct Answers:    {metrics.correct_answers} ✓")
+        print(f"  Incorrect Answers:  {metrics.incorrect_answers} ✗")
+        print(f"  Accuracy:           {metrics.accuracy:.1%} ({metrics.accuracy*100:.2f}%)")
+        
+        # Calculate and display accuracy metrics
+        if metrics.details:
+            correct_rate = (metrics.correct_answers / metrics.total_questions) * 100 if metrics.total_questions > 0 else 0
+            error_rate = (metrics.incorrect_answers / metrics.total_questions) * 100 if metrics.total_questions > 0 else 0
+            
+            print(f"\n  Performance Metrics:")
+            print(f"    • Success Rate:     {correct_rate:.2f}%")
+            print(f"    • Error Rate:       {error_rate:.2f}%")
+            print(f"    • Questions/sec:    {metrics.total_questions} questions processed")
+        
+        print(f"{'='*70}\n")
     
     @staticmethod
     def save_results(metrics: EvaluationMetrics, output_file: str) -> None:

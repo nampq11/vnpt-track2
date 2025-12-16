@@ -102,7 +102,7 @@ class VNPTService(LLMService):
         try:
             headers = self._get_headers()
             json_data = {
-                'model': 'vnptai_hackathon_small',
+                'model': self.model.replace('-', '_'),
                 'messages': [
                     {'role': 'user', 'content': user_input}
                 ],

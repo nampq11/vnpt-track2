@@ -97,9 +97,47 @@ MATH_PROMPT = """You are a math expert.
 
 Query: {query}
 
-choics:
+Choices:
 {choices}
 
 Requirement: You Must respond in valid JSON object.
 Example: {{"answer": "A"}}
+"""
+
+READING_PROMPT = """You are an expert at reading comprehension for Vietnamese text.
+
+Based on the provided text passage, answer the multiple-choice question.
+
+--- START TEXT ---
+{context}
+--- END TEXT ---
+
+Question: {question}
+
+Options:
+{choices}
+
+Requirements:
+1. Read the text carefully and find information relevant to the question
+2. Select the most correct answer based on the text content
+3. Respond in JSON format
+
+Respond with JSON: {{"answer": "A"}} or {{"answer": "B"}} or {{"answer": "C"}} or {{"answer": "D"}}
+"""
+
+RAG_PROMPT = """You are an expert in Vietnamese knowledge including: Law, History, Geography, Culture, and General Knowledge.
+
+Question: {query}
+
+{temporal_hint}{entities_hint}
+
+Options:
+{choices}
+
+Requirements:
+1. Use your knowledge to answer the question
+2. If the question relates to law or regulations, pay attention to the year mentioned
+3. Select the most accurate answer
+
+Respond with JSON: {{"answer": "A"}} or {{"answer": "B"}} or {{"answer": "C"}} or {{"answer": "D"}}
 """
