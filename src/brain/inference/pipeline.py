@@ -1,11 +1,14 @@
 """Main inference pipeline for question answering"""
 import asyncio
 import csv
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Literal
 from dataclasses import asdict
 import json
 
 from src.brain.llm.services.ollama import OllamaService
+from src.brain.llm.services.vnpt import VNPTService
+from src.brain.llm.services.azure import AzureService
+from src.brain.llm.services.type import LLMService
 from src.brain.inference.processor import Question, QuestionProcessor, PredictionResult
 from src.brain.inference.evaluator import Evaluator, EvaluationMetrics
 
@@ -15,7 +18,7 @@ class InferencePipeline:
     
     def __init__(
         self,
-        llm_service: OllamaService,
+        llm_service: LLMService,
         system_prompt: Optional[str] = None,
     ):
         self.llm_service = llm_service
@@ -116,6 +119,8 @@ async def run_pipeline(
     output_file: str,
     evaluate: bool = False,
     system_prompt: Optional[str] = None,
+    provider: Literal["ollama", "vnpt", "azure"] = "ollama",
+    model: Optional[str] = None,
 ) -> Optional[EvaluationMetrics]:
     """
     Run complete inference pipeline
@@ -125,6 +130,8 @@ async def run_pipeline(
         output_file: Path to save predictions
         evaluate: Whether to evaluate against ground truth
         system_prompt: Custom system prompt
+        provider: LLM provider to use ("ollama", "vnpt", or "azure")
+        model: Model name (optional, uses default if not provided)
     
     Returns:
         EvaluationMetrics if evaluate=True, else None
@@ -133,12 +140,24 @@ async def run_pipeline(
     from pathlib import Path
     dataset_name = Path(test_file).stem
     
-    # Initialize Ollama service
-    llm_service = OllamaService(
-        base_url="http://localhost:11434/v1",
-        api_key="ollama",
-        model="qwen3:1.7b"
-    )
+    # Initialize LLM service based on provider
+    if provider == "vnpt":
+        model_name = model or "vnptai-hackathon-small"
+        model_type = "small" if "small" in model_name else "large"
+        llm_service = VNPTService(
+            model=model_name,
+            model_type=model_type
+        )
+    elif provider == "azure":
+        llm_service = AzureService(
+            model=model or "gpt-4.1"
+        )
+    else:  # ollama
+        llm_service = OllamaService(
+            base_url="http://localhost:11434/v1",
+            api_key="ollama",
+            model=model or "qwen3:1.7b"
+        )
     
     # Create pipeline
     pipeline = InferencePipeline(

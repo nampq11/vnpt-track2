@@ -1,8 +1,11 @@
 """Simple test runner for quick inference testing"""
 import asyncio
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 from src.brain.llm.services.ollama import OllamaService
+from src.brain.llm.services.vnpt import VNPTService
+from src.brain.llm.services.azure import AzureService
+from src.brain.llm.services.type import LLMService
 from src.brain.inference.processor import QuestionProcessor, Question
 
 
@@ -39,19 +42,33 @@ class SimpleInferenceTest:
     async def test_first_n_questions(
         file_path: str,
         n: int = 5,
-        model: str = "qwen3:1.7b",
+        model: Optional[str] = None,
+        provider: Literal["ollama", "vnpt", "azure"] = "vnpt",
     ) -> None:
         """Test first N questions from dataset"""
         processor = QuestionProcessor()
         questions = processor.load_questions(file_path)[:n]
         
-        llm_service = OllamaService(
-            base_url="http://localhost:11434/v1",
-            api_key="ollama",
-            model=model
-        )
+        # Initialize LLM service based on provider
+        if provider == "vnpt":
+            model_name = model or "vnptai-hackathon-small"
+            model_type = "small" if "small" in model_name else "large"
+            llm_service = VNPTService(
+                model=model_name,
+                model_type=model_type
+            )
+        elif provider == "azure":
+            llm_service = AzureService(
+                model=model or "gpt-4.1"
+            )
+        else:  # ollama
+            llm_service = OllamaService(
+                base_url="http://localhost:11434/v1",
+                api_key="ollama",
+                model=model or "qwen3:1.7b"
+            )
         
-        print(f"Testing first {len(questions)} questions with model: {model}\n")
+        print(f"Testing first {len(questions)} questions with {provider} model: {model or 'default'}\n")
         
         correct = 0
         for i, q in enumerate(questions):

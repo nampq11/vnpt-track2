@@ -28,8 +28,14 @@ async def main():
     )
     parser.add_argument(
         "--model",
-        default="qwen3:1.7b",
-        help="Ollama model to use"
+        default=None,
+        help="Model to use (default: vnptai-hackathon-small for VNPT, qwen3:1.7b for Ollama)"
+    )
+    parser.add_argument(
+        "--provider",
+        choices=["ollama", "vnpt", "azure"],
+        default="vnpt",
+        help="LLM provider to use (default: vnpt)"
     )
     parser.add_argument(
         "--n",
@@ -46,29 +52,34 @@ async def main():
     
     if args.mode == "test":
         # Quick test on first N questions
-        print(f"Running quick test on first {args.n} questions...")
+        print(f"Running quick test on first {args.n} questions using {args.provider}...")
         await SimpleInferenceTest.test_first_n_questions(
             file_path=args.input,
             n=args.n,
-            model=args.model
+            model=args.model,
+            provider=args.provider
         )
     
     elif args.mode == "eval":
         # Full evaluation with metrics
-        print("Running full evaluation with metrics...")
+        print(f"Running full evaluation with metrics using {args.provider}...")
         await run_pipeline(
             test_file=args.input,
             output_file=args.output,
-            evaluate=True
+            evaluate=True,
+            provider=args.provider,
+            model=args.model
         )
     
     elif args.mode == "inference":
         # Inference without evaluation
-        print("Running inference (no evaluation)...")
+        print(f"Running inference (no evaluation) using {args.provider}...")
         await run_pipeline(
             test_file=args.input,
             output_file=args.output,
-            evaluate=False
+            evaluate=False,
+            provider=args.provider,
+            model=args.model
         )
 
 

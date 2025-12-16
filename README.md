@@ -6,19 +6,25 @@ LLM-based agent for Vietnamese multiple-choice question answering. Built for VNP
 ## Tech Stack
 - **Language**: Python 3.11+
 - **Package Manager**: `uv` (use `uv run`, `uv add`, `uv sync`)
-- **LLM Backend**: Ollama via OpenAI-compatible API
-- **Default Model**: `qwen3:1.7b`
+- **LLM Backends**: 
+  - **VNPT AI API** (primary) - `vnptai-hackathon-small`, `vnptai-hackathon-large`
+  - **Ollama** (local dev) - via OpenAI-compatible API
+- **Default Model**: `vnptai-hackathon-small` (VNPT)
 
 ## Project Structure
 ```
 src/brain/
-├── agent/          # Agent orchestration
+├── agent/          # Agent orchestration & query processing
+│   └── tasks/      # Task handlers (math, reading, rag)
+├── inference/      # Batch inference pipeline & evaluation
 ├── llm/
 │   ├── messages/   # Conversation & context management
-│   └── services/   # LLM service abstractions (Ollama)
-├── system-prompt/  # System prompt management
-└── utils/          # Shared utilities
+│   └── services/   # LLM providers (VNPT, Ollama)
+├── system_prompt/  # Prompt generation
+└── config.py       # Configuration classes
 data/               # QA datasets (val.json, test.json)
+config/             # API credentials (vnpt.json)
+tests/              # Integration tests
 notebooks/          # Data preparation & experiments
 ```
 
@@ -27,15 +33,94 @@ notebooks/          # Data preparation & experiments
 # Install dependencies
 uv sync --group development
 
-# Run prediction
-uv run python predict.py
+# Quick test on 5 questions (VNPT)
+uv run python predict.py --mode test --input data/test.json --provider vnpt --n 5
 
-# Run inference script
-./bin/inference.sh
+# Run full inference on test.json with CSV export (VNPT)
+uv run python predict.py --mode inference --input data/test.json --output results/test_predictions.csv --provider vnpt
+
+# Run evaluation on validation set (VNPT)
+uv run python predict.py --mode eval --input data/val.json --output results/val_predictions.json --provider vnpt
+
+# Use Ollama instead (requires local Ollama service)
+uv run python predict.py --mode test --provider ollama --model qwen3:1.7b --n 5
 
 # Start JupyterLab
 uv run jupyter lab
 ```
+
+## CLI Usage
+
+The `predict.py` script supports multiple modes and providers:
+
+### Command-Line Arguments
+
+```bash
+uv run python predict.py [OPTIONS]
+
+Options:
+  --mode {test,eval,inference}
+                        Running mode:
+                        - test: Quick test on N questions with evaluation
+                        - eval: Full dataset evaluation with metrics
+                        - inference: Prediction only (no evaluation)
+                        Default: test
+
+  --input PATH          Input test file path
+                        Default: data/test.json
+
+  --output PATH         Output predictions file path (JSON or CSV)
+                        Default: results/predictions.json
+
+  --provider {ollama,vnpt}
+                        LLM provider to use
+                        Default: vnpt
+
+  --model MODEL         Model name (optional, uses provider default)
+                        VNPT: vnptai-hackathon-small (default) or vnptai-hackathon-large
+                        Ollama: qwen3:1.7b (default) or any Ollama model
+
+  --n N                 Number of questions to test (test mode only)
+                        Default: 5
+```
+
+### Usage Examples
+
+```bash
+# Test mode: Quick test on 5 questions
+uv run python predict.py --mode test --input data/val.json --provider vnpt --n 5
+
+# Eval mode: Full evaluation with accuracy metrics (JSON output)
+uv run python predict.py --mode eval --input data/val.json --output results/val_results.json --provider vnpt
+
+# Inference mode: Generate predictions without evaluation (CSV output)
+uv run python predict.py --mode inference --input data/test.json --output results/test_predictions.csv --provider vnpt
+
+# Use large model for better accuracy
+uv run python predict.py --mode inference --input data/test.json --output results/test_large.csv --provider vnpt --model vnptai-hackathon-large
+
+# Use Ollama for local development
+uv run python predict.py --mode test --provider ollama --model qwen3:1.7b --n 10
+```
+
+### Output Formats
+
+- **JSON format**: Detailed predictions with metadata
+  ```json
+  [
+    {
+      "qid": "test_0001",
+      "predicted_answer": "A"
+    }
+  ]
+  ```
+
+- **CSV format**: Simple qid,answer format for submission
+  ```csv
+  qid,answer
+  test_0001,A
+  test_0002,B
+  ```
 
 ---
 
@@ -103,12 +188,17 @@ The Vietnamese QA Agent follows a processing pipeline that transforms user quest
 ┌─────────────────────────────────────────────────────────────────────┐
 │              4. LLM SERVICE INITIALIZATION                           │
 │                                                                       │
-│  • OllamaService setup:                                              │
+│  • VNPTService setup (Primary):                                      │
+│    - Load credentials from config/vnpt.json                          │
+│    - Configure model: vnptai-hackathon-small/large                   │
+│    - Set up authentication headers (Bearer token, token-id/key)      │
+│                                                                       │
+│  • OllamaService setup (Optional):                                   │
 │    - Initialize OpenAI client pointing to Ollama endpoint           │
 │    - Configure model: qwen3:1.7b (default)                          │
 │    - Set max_iterations: 5 (iteration limit)                        │
 │                                                                       │
-│  • Ollama Service implements LLMService interface:                   │
+│  • Both services implement LLMService interface:                     │
 │    - generate(user_input: str) -> str: async text generation        │
 │    - get_all_tools() -> Tool_Set: retrieve available tools          │
 │    - get_config() -> LLMServiceConfig: get service configuration    │
@@ -119,9 +209,9 @@ The Vietnamese QA Agent follows a processing pipeline that transforms user quest
 ┌─────────────────────────────────────────────────────────────────────┐
 │              5. GENERATE ANSWER (LLM INFERENCE)                      │
 │                                                                       │
-│  • Call OllamaService.generate(formatted_question)                  │
-│    - Sends prompt + formatted messages to Ollama API                │
-│    - Uses OpenAI-compatible API format                              │
+│  • Call LLMService.generate(formatted_question)                      │
+│    - VNPT: Sends to https://api.idg.vnpt.vn with auth headers       │
+│    - Ollama: Sends to local Ollama API endpoint                     │
 │    - Receives text response with answer and reasoning               │
 │                                                                       │
 │  • LLM Processing:                                                   │
@@ -161,7 +251,7 @@ The Vietnamese QA Agent follows a processing pipeline that transforms user quest
 2. **Context Initialization**: Set up conversation manager with formatters and prompt
 3. **System Prompt Generation**: Load Vietnamese QA instructions
 4. **Message Preparation**: Format question into LLM-compatible format
-5. **LLM Inference**: Send to Ollama (qwen3:1.7b) for answer generation
+5. **LLM Inference**: Send to VNPT AI API (vnptai-hackathon-small/large) or Ollama for answer generation
 6. **Response Parsing**: Extract answer letter and optional reasoning
 7. **Answer Output**: Return final multiple-choice answer (A/B/C/D)
 
@@ -268,9 +358,60 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync --group development
 ```
 
-#### 3.2 Ollama Service Initialization
+#### 3.2 VNPT AI Service Configuration (Primary)
 
-The system requires a running Ollama instance providing an OpenAI-compatible API endpoint.
+The system uses VNPT AI API as the primary LLM backend for the hackathon.
+
+**Configuration:**
+
+Create `config/vnpt.json` with your API credentials:
+
+```json
+[
+  {
+    "authorization": "Bearer YOUR_EMBEDDING_TOKEN",
+    "tokenId": "YOUR_EMBEDDING_TOKEN_ID",
+    "tokenKey": "YOUR_EMBEDDING_TOKEN_KEY",
+    "llmApiName": "vnptai-hackathon-embedding"
+  },
+  {
+    "authorization": "Bearer YOUR_SMALL_MODEL_TOKEN",
+    "tokenId": "YOUR_SMALL_TOKEN_ID",
+    "tokenKey": "YOUR_SMALL_TOKEN_KEY",
+    "llmApiName": "vnptai-hackathon-small"
+  },
+  {
+    "authorization": "Bearer YOUR_LARGE_MODEL_TOKEN",
+    "tokenId": "YOUR_LARGE_TOKEN_ID",
+    "tokenKey": "YOUR_LARGE_TOKEN_KEY",
+    "llmApiName": "vnptai-hackathon-large"
+  }
+]
+```
+
+**Available Models:**
+- `vnptai-hackathon-small` (default): Faster, good for most questions
+- `vnptai-hackathon-large`: Better accuracy for complex questions
+- `vnptai-hackathon-embedding`: For RAG/semantic search tasks
+
+**Usage:**
+
+```python
+from src.brain.llm.services.vnpt import VNPTService
+
+# Initialize VNPT service
+vnpt_service = VNPTService(
+    model="vnptai-hackathon-small",
+    model_type="small"  # or "large"
+)
+
+# Generate response
+response = await vnpt_service.generate("Your question here")
+```
+
+#### 3.3 Ollama Service Initialization (Optional - for Local Development)
+
+The system also supports Ollama for local development without requiring API credentials.
 
 **Installation & Setup:**
 
@@ -314,7 +455,7 @@ ollama_service = OllamaService(
 )
 ```
 
-#### 3.3 System Prompt Initialization
+#### 3.4 System Prompt Initialization
 
 The `EnhancedPromptManager` loads system instructions from:
 
@@ -338,7 +479,7 @@ system_prompt = await prompt_manager.generate_system_prompt()
 - Format for reasoning and confidence (if applicable)
 - Tool usage guidelines (if tools are enabled)
 
-#### 3.4 Message Formatting & Context Manager Initialization
+#### 3.5 Message Formatting & Context Manager Initialization
 
 The pipeline requires implementing the message formatting protocol.
 
@@ -377,7 +518,7 @@ system_prompt = await context_manager.get_system_prompt()
 - `messages`: List[InternalMessage] - conversation history
 - `current_token_count`: Tracks LLM token usage
 
-#### 3.5 Data Files Initialization
+#### 3.6 Data Files Initialization
 
 Ensure data files are present:
 
@@ -392,20 +533,43 @@ python3 -m json.tool data/val.json | head -50
 
 ### Complete Initialization Checklist
 
+**Required for VNPT (Primary):**
 - [ ] Python 3.11+ installed
 - [ ] `uv` package manager installed
 - [ ] Project dependencies installed: `uv sync --group development`
+- [ ] VNPT API credentials configured in `config/vnpt.json`
+- [ ] System prompt file exists: `src/brain/system_prompt/files/system.md`
+- [ ] Data files present: `data/val.json` and `data/test.json`
+
+**Optional for Ollama (Local Development):**
 - [ ] Ollama service installed
 - [ ] Default model pulled: `ollama pull qwen3:1.7b`
 - [ ] Ollama server running: `ollama serve` (listening on port 11434)
-- [ ] OpenAI Python client configured for Ollama endpoint
-- [ ] System prompt file exists: `src/brain/system-prompt/files/system.md`
+
+**Legacy Components (if using Agent directly):**
 - [ ] Message formatter implemented (IMessageFormatter protocol)
 - [ ] ContextManager instantiated with formatter and prompt manager
-- [ ] OllamaService initialized with OpenAI client and model
-- [ ] Data files present: `data/val.json` and `data/test.json`
 
 ### Troubleshooting Resource Initialization
+
+**VNPT API Issues:**
+```bash
+# Verify config file exists and has correct format
+cat config/vnpt.json | python -m json.tool
+
+# Test VNPT connection (if you have curl)
+curl -X POST https://api.idg.vnpt.vn/data-service/v1/chat/completions/vnptai-hackathon-small \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Token-id: YOUR_TOKEN_ID" \
+  -H "Token-key: YOUR_TOKEN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"vnptai_hackathon_small","messages":[{"role":"user","content":"Hello"}]}'
+
+# Check for common errors:
+# - 401 Unauthorized: Check authorization token
+# - 403 Forbidden: Check tokenId and tokenKey
+# - 404 Not Found: Check API endpoint and model name
+```
 
 **Ollama Connection Issues:**
 ```bash
@@ -444,9 +608,13 @@ Questions in `data/*.json` follow this structure:
 
 ## Key Interfaces
 
+- `Agent` (`src/brain/agent/agent.py`): Main query processing with classification & task routing
 - `LLMService` (`src/brain/llm/services/type.py`): Abstract base for LLM providers
+- `VNPTService` (`src/brain/llm/services/vnpt.py`): VNPT AI API client with embedding support
+- `OllamaService` (`src/brain/llm/services/ollama.py`): Ollama local LLM client
+- `InferencePipeline` (`src/brain/inference/pipeline.py`): Batch inference & evaluation
 - `ContextManager` (`src/brain/llm/messages/manager.py`): Manages conversation history
-- `EnhancedPromptManager` (`src/brain/system-prompt/enhanced-manager.py`): System prompt generation
+- `EnhancedPromptManager` (`src/brain/system_prompt/enhanced_manager.py`): System prompt generation
 
 ## Conventions
 

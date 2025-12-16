@@ -15,6 +15,16 @@ class OllamaConfig:
 
 
 @dataclass
+class AzureConfig:
+    """Azure OpenAI service configuration"""
+    api_key: Optional[str] = None
+    api_version: str = "2024-02-15-preview"
+    azure_endpoint: Optional[str] = None
+    model: str = "gpt-4.1"
+    embedding_model: str = "text-embedding-ada-002"
+
+
+@dataclass
 class InferenceConfig:
     """Inference pipeline configuration"""
     batch_size: int = 1
