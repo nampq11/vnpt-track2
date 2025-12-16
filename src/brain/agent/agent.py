@@ -67,31 +67,27 @@ class Agent:
             # Check if guardrail detected unsafe content
             is_safe, guardrail_answer = guardrail_result
             
+            # If guardrail blocked the query, return the safe answer immediately
+            if not is_safe and guardrail_answer:
+                logger.warning(f"Query blocked by guardrail embedding check")
+                return guardrail_answer
+            
             # --- LAYER 2: QUERY CLASSIFICATION ---
-            # Only classify if guardrail passed (is_safe=True and answer is empty {})
-            if is_safe:
-                classification = await self.query_classification.invoke(
-                    query=query,
-                )
-                logger.info(f"Query Classification Result: {classification}")
-            else:
-                # Guardrail blocked, treat as SAFETY category
-                logger.warning(f"Query blocked by guardrail similarity check")
-                classification = {'category': ScenarioTask.SAFETY}
+            classification = await self.query_classification.invoke(
+                query=query,
+            )
+            logger.info(f"Query Classification Result: {classification}")
 
             # --- LAYER 3: EXECUTION ---
             if classification['category'] == ScenarioTask.SAFETY:
-                # For safety category, call guardrail to get safe answer
+                # Classification identified as safety (separate from guardrail)
+                # Call guardrail with options to get appropriate response
                 is_safe_check, safe_answer = await self.guardrail.invoke(
                     user_input=query,
                     is_safe=False,
                     options=options,
                 )
-                # Guardrail returns (is_safe, answer), convert to dict
-                if isinstance(safe_answer, dict):
-                    result = safe_answer
-                else:
-                    result = {"answer": safe_answer if safe_answer else sorted(options.keys())[0]}
+                result = safe_answer if isinstance(safe_answer, dict) else {"answer": sorted(options.keys())[0]}
             elif classification['category'] == ScenarioTask.MATH:
                 result = await self.math_task.invoke(
                     query=query,
