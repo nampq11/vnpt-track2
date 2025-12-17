@@ -600,11 +600,34 @@ export LC_ALL=en_US.UTF-8
 
 ## Data Format
 
-Questions in `data/*.json` follow this structure:
-- `qid`: Question ID
-- `question`: Vietnamese question text (may include context)
-- `choices`: Array of 4 options
-- `answer`: Letter (A/B/C/D)
+### Question Format
+
+Questions in `data/*.json`:
+```json
+{
+  "qid": "test_0001",
+  "question": "Vietnamese question text",
+  "choices": ["Option A", "Option B", "Option C", "Option D"],
+  "answer": "A"
+}
+```
+
+### Knowledge Base
+
+Source documents in `data/data/`:
+```
+data/data/
+├── Bac_Ho/           # Ho Chi Minh topic
+├── Lich_Su_Viet_nam/ # Vietnamese history
+├── Van_Hoa_Viet_Nam/ # Vietnamese culture
+├── Phap_luat_Viet_Nam/ # Vietnamese law
+└── ... (26 categories total)
+```
+
+Processed into LanceDB index:
+- **26,513 chunks** (512 chars, 50 overlap)
+- **1536-dim embeddings** (Azure text-embedding-ada-002)
+- **Hybrid indexes**: Vector (cosine) + FTS + Scalar
 
 ## Key Interfaces
 
@@ -616,9 +639,49 @@ Questions in `data/*.json` follow this structure:
 - `ContextManager` (`src/brain/llm/messages/manager.py`): Manages conversation history
 - `EnhancedPromptManager` (`src/brain/system_prompt/enhanced_manager.py`): System prompt generation
 
-## Conventions
+## Performance
 
-- Async-first: Use `async/await` for LLM calls
-- Type hints required on all public functions
-- Vietnamese text handling: Ensure UTF-8 encoding
+### Accuracy (val_2 dataset)
+- **Overall**: ~80% on test samples
+- **Math**: Complex reasoning with step-by-step
+- **Reading**: Context-based comprehension
+- **RAG**: Knowledge retrieval with category filtering
+
+### RAG Performance
+- **Vector search**: <50ms
+- **Hybrid search**: <100ms
+- **Add 100 docs**: ~30 seconds
+- **Delete**: <1 second
+
+---
+
+## Development
+
+### Conventions
+
+- **Async-first**: Use `async/await` for LLM calls
+- **Type hints**: Required on all public functions
+- **Vietnamese text**: UTF-8 encoding, underthesea tokenization
+- **Testing**: Unit tests + integration tests
+
+### Adding New Categories
+
+1. Add documents to `data/data/new_category/`
+2. Run: `./bin/knowledge.sh upsert --data-dir data/data/new_category --provider azure`
+3. Verify: `./bin/knowledge.sh info`
+
+### Updating Documents
+
+1. Delete old: `./bin/knowledge.sh delete --file "path/to/file.txt"`
+2. Add new: `./bin/knowledge.sh upsert --data-dir temp_dir --provider azure`
+
+---
+
+## Documentation
+
+- **Agent System**: `src/brain/agent/README.md`
+- **RAG System**: `docs/RAG_USAGE_GUIDE.md`
+- **CLI Tools**: `bin/README.md`, `bin/QUICKSTART.md`
+- **Migration**: `plans/20251217-migrate-faiss-to-lancedb/`
+- **CoT Prompts**: `docs/COT_PROMPTS.md`
 

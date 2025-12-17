@@ -38,14 +38,14 @@ class RAGTask(BaseTask):
             self.retriever = retriever
         elif use_retrieval and os.path.exists(index_dir):
             try:
-                from src.brain.rag.retriever import HybridRetriever
-                self.retriever = HybridRetriever.from_directory(
+                from src.brain.rag.lancedb_retriever import LanceDBRetriever
+                self.retriever = LanceDBRetriever.from_directory(
                     index_dir=index_dir,
                     llm_service=llm_service,
                 )
-                logger.info(f"Loaded retriever from {index_dir}")
+                logger.info(f"Loaded LanceDB retriever from {index_dir}")
             except Exception as e:
-                logger.warning(f"Failed to load retriever: {e}")
+                logger.warning(f"Failed to load LanceDB retriever: {e}")
                 self.retriever = None
         else:
             self.retriever = None
@@ -152,7 +152,7 @@ class RAGTask(BaseTask):
             context = ""
             if self.retriever is not None:
                 try:
-                    from src.brain.rag.retriever import format_retrieval_context
+                    from src.brain.rag.lancedb_retriever import format_retrieval_context
                     
                     # Infer category filter from classification entities
                     category_filter = self._infer_category_filter(key_entities)

@@ -16,6 +16,7 @@ src/brain/
 │   └── tasks/      # Task handlers (math, reading, rag)
 ├── inference/      # Batch inference pipeline & evaluation
 ├── llm/services/   # LLM providers (VNPT, Ollama)
+├── rag/            # RAG system (LanceDB, document processor)
 ├── system_prompt/  # Prompt generation
 └── config.py       # Configuration classes
 data/               # QA datasets (val.json, test.json)
@@ -33,6 +34,9 @@ uv run python predict.py
 
 # Run inference script
 ./bin/inference.sh
+
+# Run evaluation (flexible)
+./bin/eval.sh --n 10 --provider azure
 
 # Start JupyterLab
 uv run jupyter lab

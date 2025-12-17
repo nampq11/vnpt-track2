@@ -5,9 +5,9 @@ description = "LLM-based Vietnamese QA agent for VNPT Hackathon Track 2"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "faiss-cpu>=1.13.1",
+    "lancedb>=0.26.0",
     "openai>=2.9.0",
-    "rank-bm25>=0.2.2",
+    "pyarrow>=22.0.0",
     "underthesea>=8.3.0",
 ]
 
