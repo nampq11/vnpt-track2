@@ -32,7 +32,7 @@ class GuardrailService:
             )
         
         self.safety_index = np.load(safety_index_path)
-        self.safety_threshold = 0.85
+        self.safety_threshold = 0.9
 
         # Load safety queries
         safety_queries_path = os.getenv('SAFETY_QUERIES_PATH', 'data/embeddings/safety_queries.json')

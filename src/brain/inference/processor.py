@@ -23,6 +23,70 @@ class QuestionProcessor:
     """Process and format questions for LLM inference"""
     
     @staticmethod
+    def _clean_choices(choices: List[str], qid: str = "") -> tuple[List[str], str]:
+        """
+        Clean malformed choices arrays that contain question fragments.
+        
+        Returns:
+            tuple: (cleaned_choices, question_continuation)
+            - cleaned_choices: List of actual answer choices
+            - question_continuation: Text to append to question (LaTeX, question fragments)
+        
+        Heuristic: Real choices are typically:
+        - Non-empty strings
+        - Don't start with LaTeX symbols (=, &, \\, $$)
+        - Don't end with question marks (those are question continuations)
+        - Are reasonably substantive (length > 5)
+        """
+        if len(choices) <= 4:
+            # Standard format, no cleaning needed
+            return choices, ""
+        
+        question_parts = []  # Fragments to add to question
+        cleaned = []  # Actual answer choices
+        
+        for i, choice in enumerate(choices):
+            # Skip empty strings but track them
+            if not choice or not choice.strip():
+                continue
+            
+            stripped = choice.strip()
+            
+            # Check if it's a LaTeX fragment
+            is_latex = stripped.startswith(('=', '&', '\\', '$$', 'begin{', 'end{'))
+            
+            # Check if it's a question fragment (ends with ?)
+            is_question = stripped.endswith('?')
+            
+            # Check if very short (likely not complete choice)
+            is_too_short = len(stripped) < 5
+            
+            # If it looks like question content, add to question_parts
+            if is_latex or is_question or is_too_short:
+                question_parts.append(choice)
+            else:
+                # Otherwise it's a real choice
+                cleaned.append(choice)
+        
+        # If we filtered down to a reasonable number (4-10 choices), use cleaned
+        if 4 <= len(cleaned) <= 26:
+            question_continuation = "\n".join(question_parts) if question_parts else ""
+            
+            if len(cleaned) != len(choices):
+                from loguru import logger
+                logger.warning(
+                    f"Cleaned malformed choices for {qid}: "
+                    f"{len(choices)} → {len(cleaned)} choices"
+                )
+                if question_continuation:
+                    logger.debug(f"Appending {len(question_parts)} fragments to question")
+            
+            return cleaned, question_continuation
+        
+        # Otherwise, return original (better to have malformed than empty)
+        return choices, ""
+    
+    @staticmethod
     def load_questions(file_path: str) -> List[Question]:
         """Load questions from JSON file"""
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -30,10 +94,23 @@ class QuestionProcessor:
         
         questions = []
         for item in data:
+            raw_choices = item.get('choices', [])
+            qid = item.get('qid', '')
+            original_question = item.get('question', '')
+            
+            # Clean malformed choices and get question continuation
+            cleaned_choices, question_continuation = QuestionProcessor._clean_choices(raw_choices, qid)
+            
+            # Append question continuation if exists
+            if question_continuation:
+                complete_question = original_question + "\n" + question_continuation
+            else:
+                complete_question = original_question
+            
             q = Question(
-                qid=item.get('qid', ''),
-                question=item.get('question', ''),
-                choices=item.get('choices', []),
+                qid=qid,
+                question=complete_question,
+                choices=cleaned_choices,
                 answer=item.get('answer', '')
             )
             questions.append(q)

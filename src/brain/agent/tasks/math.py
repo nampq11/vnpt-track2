@@ -63,7 +63,7 @@ class MathTask(BaseTask):
                 query=query,
                 choices=choices_str,
             )
-            logger.debug(f"Math Task calling LLM with prompt length: {len(prompt)}")
+            logger.info(f"Math Task calling LLM with prompt: {prompt}")
             response_text = await self.llm_service.generate(
                 user_input=prompt,
             )

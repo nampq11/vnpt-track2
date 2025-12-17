@@ -32,7 +32,7 @@ class QueryClassificationService:
             logger.error(f"Error invoking Query Classification Service: {e}")
             return {
                 "category": "RAG",
-                "temporal_constrait": None,
+                "temporal_constraint": None,
                 "reasoning": "Error invoking Query Classification Service",
                 "key_entities": []
             }
@@ -51,6 +51,7 @@ class QueryClassificationService:
             logger.error(f"Error parsing JSON answer: {e}")
             return {
                 "category": "RAG",
-                "temporal_constrait": None,
-                "reasoning": "JSON Parsing Error"
+                "temporal_constraint": None,
+                "reasoning": "JSON Parsing Error",
+                "key_entities": []
             }

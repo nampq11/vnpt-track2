@@ -93,20 +93,38 @@ Requirement: You Must respond in valid JSON object.
 Example: {{"answer": "A"}}
 """
 
-MATH_PROMPT = """You are a math expert.
+MATH_PROMPT = """You are a highly accurate Mathematical Reasoning Engine.
+Your task is to solve the user's problem and select the correct option from the provided choices.
 
 Query: {query}
 
 Choices:
 {choices}
 
-Requirement: You Must respond in valid JSON object.
-Example: {{"answer": "A"}}
+Instructions:
+1. **DECONSTRUCT**: Identify the core function explicitly. (e.g., "Find minimum of a(t) = ...").
+2. **STRATEGY SELECTION**:
+   - IF the problem asks for Min/Max/Value at specific points AND options are numerical: **DO NOT use derivatives.**
+   - INSTEAD: **CALCULATE the function value for EACH option provided.**
+   - Compare the results to find the best match.
+3. **EXECUTION**:
+   - If calculating for options A, B, C, D... Show the value for each.
+   - Example: "At t=1, a(t)=0. At t=2, a(t)=-12..."
+4. **VERIFY**: Does the selected value satisfy all constraints (e.g., within range [0,5])?
+5. **FORMAT**: Output the result as a strict JSON object.
+
+Output Format:
+{{
+  "step_by_step_reasoning": "Step 1: Function is a(t)=... Step 2: Checking Option A (t=0) -> a(0)=36. Checking Option B (t=1) -> a(1)=0. Checking Option C (t=2) -> a(2)=-12... Conclusion: -12 is the lowest value.",
+  "answer": "A" // Must be one of: A, B, C, D
+}}
+
+Requirement: Respond with ONLY the valid JSON object.
 """
 
 READING_PROMPT = """You are an expert at reading comprehension for Vietnamese text.
 
-Based on the provided text passage, answer the multiple-choice question.
+Based on the provided text passage, answer the multiple-choice question using step-by-step reasoning.
 
 --- START TEXT ---
 {context}
@@ -117,12 +135,25 @@ Question: {question}
 Options:
 {choices}
 
-Requirements:
-1. Read the text carefully and find information relevant to the question
-2. Select the most correct answer based on the text content
-3. Respond in JSON format
+Instructions:
+1. **LOCATE**: Identify the relevant section(s) in the text that relate to the question
+2. **EXTRACT**: Quote or paraphrase the key information from the text
+3. **ANALYZE**: Compare the extracted information with each option
+4. **VERIFY**: Ensure the selected answer is directly supported by the text
+5. **FORMAT**: Output the result as a strict JSON object
 
-Respond with JSON: {{"answer": "A"}} or {{"answer": "B"}} or {{"answer": "C"}} or {{"answer": "D"}}
+Output Format:
+{{
+  "reasoning": "Step 1: The text states '...' which is relevant to the question. Step 2: Comparing with options - Option A says..., Option B says..., Option C says..., Option D says... Step 3: Based on the text, the correct answer is [X] because...",
+  "answer": "A" // Must be one of: A, B, C, D (or E, F... for multi-choice)
+}}
+
+Requirements:
+- Base your answer ONLY on information found in the provided text
+- If the text doesn't clearly support any option, choose the most reasonable one
+- Be explicit about which part of the text supports your answer
+
+Respond with ONLY the valid JSON object.
 """
 
 RAG_PROMPT = """You are an expert in Vietnamese knowledge including: Law, History, Geography, Culture, and General Knowledge.
@@ -134,10 +165,59 @@ Question: {query}
 Options:
 {choices}
 
-Requirements:
-1. Use your knowledge to answer the question
-2. If the question relates to law or regulations, pay attention to the year mentioned
-3. Select the most accurate answer
+Instructions:
+1. **UNDERSTAND**: Analyze what the question is asking
+2. **RECALL**: Use your knowledge about the topic (Law, History, Geography, Culture, etc.)
+3. **EVALUATE**: Compare each option against your knowledge
+4. **VERIFY**: Check temporal constraints (e.g., year) if mentioned
+5. **FORMAT**: Output the result as a strict JSON object
 
-Respond with JSON: {{"answer": "A"}} or {{"answer": "B"}} or {{"answer": "C"}} or {{"answer": "D"}}
+Output Format:
+{{
+  "reasoning": "Step 1: The question asks about... Step 2: Based on my knowledge, [relevant facts]... Step 3: Comparing options - A says..., B says..., C says..., D says... Step 4: The correct answer is [X] because...",
+  "answer": "A" // Must be one of: A, B, C, D (or E, F... for multi-choice)
+}}
+
+Requirements:
+- Pay attention to temporal constraints (e.g., "Luật 2024" means focus on 2024 regulations)
+- Be precise with factual information
+- If uncertain, choose the most reasonable option
+
+Respond with ONLY the valid JSON object.
+"""
+
+RAG_PROMPT_WITH_CONTEXT = """You are an expert in Vietnamese knowledge including: Law, History, Geography, Culture, and General Knowledge.
+
+### Retrieved Context:
+{context}
+
+### Question:
+{query}
+
+{temporal_hint}{entities_hint}
+
+### Options:
+{choices}
+
+Instructions:
+1. **READ CONTEXT**: Carefully review the retrieved context above
+2. **LOCATE**: Identify relevant information in the context that relates to the question
+3. **ANALYZE**: If context is insufficient, use your general knowledge
+4. **EVALUATE**: Compare each option against the context and your knowledge
+5. **VERIFY**: Check temporal constraints (e.g., year) if mentioned
+6. **FORMAT**: Output the result as a strict JSON object
+
+Output Format:
+{{
+  "reasoning": "Step 1: The retrieved context mentions '...' which is relevant. Step 2: The question asks about... Step 3: Comparing options - A says..., B says..., C says..., D says... Step 4: Based on the context/knowledge, the correct answer is [X] because...",
+  "answer": "A" // Must be one of: A, B, C, D (or E, F... for multi-choice)
+}}
+
+Requirements:
+- Prioritize information from the retrieved context
+- If context is insufficient or irrelevant, rely on your general knowledge
+- Pay attention to temporal constraints (e.g., "Luật 2024")
+- Be explicit about whether your answer comes from context or knowledge
+
+Respond with ONLY the valid JSON object.
 """

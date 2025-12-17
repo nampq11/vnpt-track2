@@ -57,7 +57,7 @@ class ReadingTask(BaseTask):
         return "\n".join([f"{k}. {v}" for k, v in sorted(options.items())])
 
     def _parse_json_answer(self, text: str, options: Dict[str, str]) -> Dict[str, str]:
-        """Extract JSON answer from LLM response."""
+        """Extract JSON answer from LLM response with CoT reasoning."""
         try:
             match = re.search(r'\{.*?\}', text, re.DOTALL)
             if match:
@@ -65,7 +65,11 @@ class ReadingTask(BaseTask):
                 if "answer" in data:
                     answer = data["answer"].upper().strip()
                     if answer in options:
-                        return {"answer": answer}
+                        result = {"answer": answer}
+                        # Log reasoning if present (for debugging/analysis)
+                        if "reasoning" in data:
+                            logger.debug(f"CoT Reasoning: {data['reasoning'][:200]}...")
+                        return result
         except Exception as e:
             logger.warning(f"JSON parsing failed: {e}")
         
@@ -91,6 +95,10 @@ class ReadingTask(BaseTask):
                 context=context,
                 question=question,
                 choices=choices_str,
+            )
+
+            logger.info(
+                f"Reading Task Prompt: {prompt}"
             )
             
             response_text = await self.llm_service.generate(
