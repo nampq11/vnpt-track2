@@ -1,6 +1,4 @@
 from abc import ABC, abstractmethod
-from optparse import Option
-from token import OP
 import aiohttp
 from typing import Any, Dict, List, Optional
 

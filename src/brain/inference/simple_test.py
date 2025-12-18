@@ -1,11 +1,6 @@
 """Simple test runner for quick inference testing"""
-import asyncio
-from typing import List, Optional, Literal
-
-from src.brain.llm.services.ollama import OllamaService
-from src.brain.llm.services.vnpt import VNPTService
-from src.brain.llm.services.azure import AzureService
-from src.brain.llm.services.type import LLMService
+from typing import Optional, Literal
+from src.brain.llm.services.factory import LLMFactory
 from src.brain.inference.processor import QuestionProcessor, Question
 
 
@@ -19,11 +14,12 @@ class SimpleInferenceTest:
         base_url: str = "http://localhost:11434/v1",
     ) -> str:
         """Test inference on a single question"""
-        # Initialize service
-        llm_service = OllamaService(
+        # Initialize service (defaulting to ollama for simple test)
+        llm_service = LLMFactory.create(
+            provider="ollama",
+            model=model,
             base_url=base_url,
-            api_key="ollama",
-            model=model
+            api_key="ollama"
         )
         
         # Format question
@@ -49,24 +45,8 @@ class SimpleInferenceTest:
         processor = QuestionProcessor()
         questions = processor.load_questions(file_path)[:n]
         
-        # Initialize LLM service based on provider
-        if provider == "vnpt":
-            model_name = model or "vnptai-hackathon-small"
-            model_type = "small" if "small" in model_name else "large"
-            llm_service = VNPTService(
-                model=model_name,
-                model_type=model_type
-            )
-        elif provider == "azure":
-            llm_service = AzureService(
-                model=model or "gpt-4.1"
-            )
-        else:  # ollama
-            llm_service = OllamaService(
-                base_url="http://localhost:11434/v1",
-                api_key="ollama",
-                model=model or "qwen3:1.7b"
-            )
+        # Initialize LLM service based on provider via Factory
+        llm_service = LLMFactory.create(provider=provider, model=model)
         
         print(f"Testing first {len(questions)} questions with {provider} model: {model or 'default'}\n")
         
@@ -88,4 +68,3 @@ class SimpleInferenceTest:
             print(f"Response preview: {response[:200]}...\n")
         
         print(f"Accuracy: {correct}/{len(questions)} ({100*correct//len(questions)}%)")
-

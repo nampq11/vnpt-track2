@@ -1,14 +1,14 @@
 """Main inference pipeline for question answering"""
 import asyncio
 import csv
-from typing import List, Optional, Dict, Literal
+from typing import List, Optional, Literal
 from dataclasses import asdict
 import json
+from pathlib import Path
+from loguru import logger
 
-from src.brain.llm.services.ollama import OllamaService
-from src.brain.llm.services.vnpt import VNPTService
-from src.brain.llm.services.azure import AzureService
 from src.brain.llm.services.type import LLMService
+from src.brain.llm.services.factory import LLMFactory
 from src.brain.agent.agent import Agent
 from src.brain.inference.processor import Question, QuestionProcessor, PredictionResult
 from src.brain.inference.evaluator import Evaluator, EvaluationMetrics
@@ -45,7 +45,7 @@ Cuối cùng, cho biết rõ ràng đáp án bạn chọn (A, B, C hoặc D)."""
         batch_size: int = 1,
     ) -> List[PredictionResult]:
         """
-        Run inference on a batch of questions
+        Run inference on a batch of questions concurrently.
         
         Args:
             questions: List of Question objects
@@ -54,52 +54,61 @@ Cuối cùng, cho biết rõ ràng đáp án bạn chọn (A, B, C hoặc D)."""
         Returns:
             List of PredictionResult objects
         """
+        semaphore = asyncio.Semaphore(batch_size)
         predictions = []
+        total = len(questions)
+        completed = 0
         
-        for i, question in enumerate(questions):
-            print(f"Processing question {i+1}/{len(questions)} ({question.qid})...", end=" ")
-            
-            try:
-                if self.use_agent:
-                    # Use Agent with task routing
-                    # Format choices as dict
-                    options = {
-                        chr(65 + i): choice 
-                        for i, choice in enumerate(question.choices)
-                    }
+        print(f"Processing {total} questions with batch size {batch_size}...")
+        
+        async def process_one(question: Question) -> PredictionResult:
+            nonlocal completed
+            async with semaphore:
+                try:
+                    if self.use_agent:
+                        # Format choices as dict
+                        options = {
+                            chr(65 + i): choice 
+                            for i, choice in enumerate(question.choices)
+                        }
+                        
+                        # Call agent
+                        result = await self.agent.process_query(
+                            query=question.question,
+                            options=options,
+                            query_id=question.qid
+                        )
+                        answer = result.get('answer', 'A')
+                        
+                    else:
+                        # Use simple LLM prompting (legacy)
+                        user_prompt = self.processor.format_for_llm(question)
+                        full_prompt = f"{self.system_prompt}\n\n{user_prompt}"
+                        response = await self.llm_service.generate(full_prompt)
+                        answer = self.processor.parse_answer(response)
                     
-                    # Call agent
-                    result = await self.agent.process_query(
-                        query=question.question,
-                        options=options,
-                        query_id=question.qid
+                    completed += 1
+                    if completed % 5 == 0 or completed == total:
+                        print(f"Progress: {completed}/{total} ({completed/total:.1%})")
+                    
+                    return PredictionResult(
+                        qid=question.qid,
+                        predicted_answer=answer
                     )
                     
-                    # Extract answer from result
-                    answer = result.get('answer', 'A')
-                    
-                else:
-                    # Use simple LLM prompting (legacy)
-                    user_prompt = self.processor.format_for_llm(question)
-                    full_prompt = f"{self.system_prompt}\n\n{user_prompt}"
-                    response = await self.llm_service.generate(full_prompt)
-                    answer = self.processor.parse_answer(response)
-                
-                result = PredictionResult(
-                    qid=question.qid,
-                    predicted_answer=answer
-                )
-                predictions.append(result)
-                print(f"✓ Answer: {answer}")
-                
-            except Exception as e:
-                print(f"✗ Error: {str(e)}")
-                # Default to 'A' on error
-                predictions.append(PredictionResult(
-                    qid=question.qid,
-                    predicted_answer='A'
-                ))
+                except Exception as e:
+                    logger.error(f"Error processing question {question.qid}: {e}")
+                    completed += 1
+                    return PredictionResult(
+                        qid=question.qid,
+                        predicted_answer='A'
+                    )
+
+        tasks = [process_one(q) for q in questions]
+        predictions = await asyncio.gather(*tasks)
         
+        # Sort predictions to match input order (gather preserves order, but just to be safe if logic changes)
+        # Actually gather preserves order of tasks list, so this matches 'questions' list order.
         return predictions
     
     def save_predictions_csv(
@@ -162,28 +171,10 @@ async def run_pipeline(
     Returns:
         EvaluationMetrics if evaluate=True, else None
     """
-    # Extract dataset name from file path
-    from pathlib import Path
     dataset_name = Path(test_file).stem
     
-    # Initialize LLM service based on provider
-    if provider == "vnpt":
-        model_name = model or "vnptai-hackathon-small"
-        model_type = "small" if "small" in model_name else "large"
-        llm_service = VNPTService(
-            model=model_name,
-            model_type=model_type
-        )
-    elif provider == "azure":
-        llm_service = AzureService(
-            model=model or "gpt-4.1"
-        )
-    else:  # ollama
-        llm_service = OllamaService(
-            base_url="http://localhost:11434/v1",
-            api_key="ollama",
-            model=model or "qwen3:1.7b"
-        )
+    # Initialize LLM service via Factory
+    llm_service = LLMFactory.create(provider=provider, model=model)
     
     # Create pipeline
     pipeline = InferencePipeline(
@@ -199,7 +190,6 @@ async def run_pipeline(
     
     # Filter by specific QIDs if provided
     if qids is not None and len(qids) > 0:
-        # Filter questions by QID
         qid_set = set(qids)
         questions = [q for q in all_questions if q.qid in qid_set]
         if len(questions) == 0:
@@ -217,7 +207,10 @@ async def run_pipeline(
     
     # Run inference
     print("Starting inference...")
-    predictions = await pipeline.run_inference(questions)
+    # Determine batch size: 5 for API providers, 1 for local Ollama (unless specified otherwise)
+    batch_size = 5 if provider in ["vnpt", "azure"] else 1
+    
+    predictions = await pipeline.run_inference(questions, batch_size=batch_size)
     
     # Save predictions
     pipeline.save_predictions(predictions, output_file)
@@ -245,4 +238,3 @@ async def run_pipeline(
         return metrics
     
     return None
-

@@ -8,11 +8,13 @@
 #   info                         Show knowledge base statistics
 #   build                        Build index from scratch (~10 min)
 #   upsert                       Add/update documents incrementally (~30 sec per 100)
+#   smart-upsert                 Auto-skip already indexed files (RECOMMENDED)
 #   delete                       Delete documents by file or category
 #
 # Quick Examples:
 #   ./bin/knowledge.sh info
 #   ./bin/knowledge.sh build --data-dir data/data --provider azure
+#   ./bin/knowledge.sh smart-upsert --data-dir data/data --provider azure
 #   ./bin/knowledge.sh upsert --data-dir data/new --provider azure
 #   ./bin/knowledge.sh delete --file "data/data/Bac_Ho/Hồ_Chí_Minh.txt"
 #   ./bin/knowledge.sh delete --category "test_category"

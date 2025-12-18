@@ -74,21 +74,12 @@ class Agent:
             # --- LAYER 1: FAST SAFE CHECK ---
             try:
                 async with aiohttp.ClientSession() as session:
-                    embedding_response = await self.llm_service.get_embedding(
+                    query_embedding = await self.llm_service.get_embedding(
                         session=session,
                         text=query,
                     )
-                    # Extract embedding vector from response
-                    # VNPT API returns dict with 'data' containing embeddings
-                    # Azure returns direct list
-                    if isinstance(embedding_response, dict) and 'data' in embedding_response:
-                        query_embedding = embedding_response['data'][0]['embedding']
-                    elif isinstance(embedding_response, list):
-                        query_embedding = embedding_response
-                    else:
-                        query_embedding = None
                     
-                    if query_embedding is not None:
+                    if query_embedding:
                         guardrail_result = await self.guardrail.invoke(
                             user_input=query,
                             embedding=query_embedding,

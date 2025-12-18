@@ -1,6 +1,7 @@
 """Evaluation metrics and performance tracking"""
 from typing import List, Dict
 from dataclasses import dataclass
+import json
 
 
 @dataclass
@@ -86,8 +87,6 @@ class Evaluator:
     @staticmethod
     def save_results(metrics: EvaluationMetrics, output_file: str) -> None:
         """Save evaluation results to file"""
-        import json
-        
         results = {
             'accuracy': metrics.accuracy,
             'total_questions': metrics.total_questions,
@@ -98,4 +97,3 @@ class Evaluator:
         
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(results, f, ensure_ascii=False, indent=2)
-

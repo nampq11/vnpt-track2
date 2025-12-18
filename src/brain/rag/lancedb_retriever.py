@@ -155,19 +155,14 @@ class LanceDBRetriever:
         """Get embedding for query."""
         try:
             async with aiohttp.ClientSession() as session:
-                response = await self.llm_service.get_embedding(
+                embedding = await self.llm_service.get_embedding(
                     session=session,
                     text=query,
                 )
                 
-                if isinstance(response, dict) and 'data' in response:
-                    embedding = response['data'][0].get('embedding')
-                elif isinstance(response, list):
-                    embedding = response
-                else:
-                    return None
-                
-                return np.array(embedding, dtype='float32')
+                if embedding:
+                    return np.array(embedding, dtype='float32')
+                return None
         except Exception as e:
             logger.error(f"Failed to get query embedding: {e}")
             return None

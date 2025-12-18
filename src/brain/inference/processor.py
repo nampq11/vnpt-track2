@@ -2,6 +2,8 @@
 from dataclasses import dataclass
 from typing import List
 import json
+import re
+from loguru import logger
 
 
 @dataclass
@@ -69,7 +71,6 @@ class QuestionProcessor:
             question_continuation = "\n".join(question_parts) if question_parts else ""
             
             if len(cleaned) != len(choices):
-                from loguru import logger
                 logger.warning(
                     f"Cleaned malformed choices for {qid}: "
                     f"{len(choices)} → {len(cleaned)} choices"
@@ -144,9 +145,6 @@ Hãy chọn một đáp án đúng nhất ({choice_range}) và giải thích ng�
         """Extract answer from LLM response"""
         response_upper = response.upper()
         
-        # All possible answer letters A-Z
-        import re
-        
         # Look for explicit patterns with answer markers
         # Pattern 1: "Đáp án: A" or "Đáp án đúng nhất: A" or similar
         patterns = [
@@ -182,4 +180,3 @@ Hãy chọn một đáp án đúng nhất ({choice_range}) và giải thích ng�
         
         # Default to 'A' if can't parse
         return 'A'
-

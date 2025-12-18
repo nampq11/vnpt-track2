@@ -57,7 +57,10 @@ class AzureService(LLMService):
         stream: Optional[bool] = False,
     ) -> str:
         """
-        Generate response from Azure OpenAI API
+        Generate response from Azure OpenAI API.
+        
+        Note: Azure OpenAI SDK has built-in retry logic with exponential backoff.
+        Default behavior includes 3 retries for rate limits and transient errors.
         
         Args:
             user_input: User input text
@@ -92,7 +95,10 @@ class AzureService(LLMService):
         text: str,
     ) -> List[float]:
         """
-        Get embedding from Azure OpenAI API
+        Get embedding from Azure OpenAI API.
+        
+        Note: Azure OpenAI SDK has built-in retry logic with exponential backoff.
+        Default behavior includes 3 retries for rate limits and transient errors.
         
         Args:
             session: aiohttp session (unused, kept for interface compatibility)

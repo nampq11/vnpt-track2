@@ -1,9 +1,9 @@
-from typing import Optional
+from typing import Optional, List
 from src.brain.llm.services.type import LLMService, LLMServiceConfig
 from openai import OpenAI
 import aiohttp
 import ollama
-from typing import List
+from src.brain.llm.services.retry_utils import retry_sync
 
 class OllamaServiceConfig(LLMServiceConfig):
     def __init__(self, model: str = "qwen3:1.7b"):
@@ -30,7 +30,10 @@ class OllamaService(LLMService):
         user_input: str,
         stream: Optional[bool] = False,
     ) -> str:
-        """Generate response from Ollama via OpenAI API"""
+        """
+        Generate response from Ollama via OpenAI API.
+        Note: OpenAI client has built-in retry logic, no additional retries needed.
+        """
         try:
             response = self.openai.chat.completions.create(
                 model=self.model,
@@ -52,16 +55,25 @@ class OllamaService(LLMService):
             raise RuntimeError(f"Error generating response from Ollama: {str(e)}")
     
     async def get_embedding(self, session: aiohttp.ClientSession, text: str) -> List[float]:
+        """Get embedding from Ollama with retry logic (3 retries, exponential backoff)"""
         try:
-            response = ollama.embed(
-                model="nomic-embed-text",
-                input=text,
-            )
-            # Return the first (and only) embedding from the response
-            embeddings = response['embeddings']
-            return embeddings[0] if embeddings else []
+            return self._get_embedding_with_retry(text)
         except Exception as e:
             raise RuntimeError(f"Error getting embedding from Ollama: {str(e)}")
+    
+    @retry_sync(
+        max_retries=3,
+        exceptions=(ConnectionError, TimeoutError, Exception)
+    )
+    def _get_embedding_with_retry(self, text: str) -> List[float]:
+        """Internal method with retry logic for get_embedding()"""
+        response = ollama.embed(
+            model="nomic-embed-text",
+            input=text,
+        )
+        # Return the first (and only) embedding from the response
+        embeddings = response['embeddings']
+        return embeddings[0] if embeddings else []
 
     def get_all_tools(self):
         """Return available tools"""

@@ -272,6 +272,12 @@ class LanceDBIndex:
         table.delete(f"source_file = '{source_file}'")
         logger.info(f"Deleted chunks from {source_file}")
     
+    def get_indexed_files(self) -> set:
+        """Get set of all indexed source files."""
+        table = self._get_table()
+        df = table.to_pandas()
+        return set(df["source_file"].unique())
+    
     def _get_table(self):
         """Get or load table."""
         if self._table is None:

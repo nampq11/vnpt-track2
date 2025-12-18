@@ -143,6 +143,89 @@ class KnowledgeManager:
         
         return True
     
+    async def smart_upsert_documents(
+        self,
+        data_dir: str,
+        chunk_size: int = 512,
+        overlap: int = 50,
+        batch_size: int = 50,
+        skip_indexed: bool = True,
+    ):
+        """Add or update documents incrementally, skipping already indexed files."""
+        logger.info(f"Smart upserting documents from {data_dir}")
+        
+        # Load existing index
+        index = LanceDBIndex.load(str(self.index_dir), table_name="knowledge")
+        logger.info(f"Loaded index with {index.ntotal} existing vectors")
+        
+        # Get already indexed files
+        indexed_files = set()
+        if skip_indexed:
+            indexed_files = index.get_indexed_files()
+            logger.info(f"Found {len(indexed_files)} files already indexed")
+        
+        # Process new documents
+        logger.info("Processing documents...")
+        processor = DocumentProcessor(chunk_size=chunk_size, overlap=overlap)
+        all_chunks = processor.process_directory(Path(data_dir))
+        
+        # Filter out chunks from already indexed files
+        if skip_indexed:
+            chunks = [
+                c for c in all_chunks 
+                if c.metadata.get("source_file", "") not in indexed_files
+            ]
+            skipped = len(all_chunks) - len(chunks)
+            logger.info(f"Skipped {skipped} chunks from {len(indexed_files)} indexed files")
+        else:
+            chunks = all_chunks
+        
+        logger.info(f"Created {len(chunks)} new chunks to index")
+        
+        if len(chunks) == 0:
+            logger.warning("No new chunks to upsert")
+            return False
+        
+        # Generate embeddings
+        logger.info("Generating embeddings...")
+        embeddings = await self._generate_embeddings(
+            [c.content for c in chunks],
+            batch_size=batch_size
+        )
+        
+        embeddings_matrix = np.array(embeddings, dtype='float32')
+        
+        # Prepare chunk data
+        chunk_dicts = [
+            {
+                "chunk_id": c.chunk_id,
+                "content": c.content,
+                "category": c.metadata.get("category", "unknown"),
+                "title": c.metadata.get("title", ""),
+                "section": c.metadata.get("section", ""),
+                "source_file": c.metadata.get("source_file", ""),
+            }
+            for c in chunks
+        ]
+        
+        # Add documents
+        logger.info("Adding documents to index...")
+        index.add_documents(embeddings_matrix, chunk_dicts)
+        
+        logger.info("✅ Smart upsert complete!")
+        logger.info(f"   - Added: {len(chunks)} chunks")
+        logger.info(f"   - Total: {index.ntotal} vectors")
+        
+        # Update chunks.json
+        logger.info("Updating chunks metadata...")
+        chunks_path = self.index_dir / "chunks.json"
+        if chunks_path.exists():
+            existing_chunks = load_chunks(str(chunks_path))
+            all_chunks = existing_chunks + chunks
+            save_chunks(all_chunks, str(chunks_path))
+        
+        return True
+    
     async def upsert_documents(
         self,
         data_dir: str,
@@ -417,6 +500,52 @@ async def main():
         help="Batch size for embeddings"
     )
     
+    # Smart Upsert command (skip already indexed files)
+    smart_upsert_parser = subparsers.add_parser(
+        "smart-upsert", 
+        help="Add/update documents, auto-skip already indexed files"
+    )
+    smart_upsert_parser.add_argument(
+        "--data-dir",
+        required=True,
+        help="Directory containing new documents"
+    )
+    smart_upsert_parser.add_argument(
+        "--index-dir",
+        default="data/embeddings/knowledge",
+        help="Index directory"
+    )
+    smart_upsert_parser.add_argument(
+        "--provider",
+        choices=["azure", "vnpt"],
+        default="azure",
+        help="Embedding provider"
+    )
+    smart_upsert_parser.add_argument(
+        "--chunk-size",
+        type=int,
+        default=512,
+        help="Chunk size in characters"
+    )
+    smart_upsert_parser.add_argument(
+        "--overlap",
+        type=int,
+        default=50,
+        help="Overlap between chunks"
+    )
+    smart_upsert_parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=50,
+        help="Batch size for embeddings"
+    )
+    smart_upsert_parser.add_argument(
+        "--skip-indexed",
+        action="store_true",
+        default=True,
+        help="Skip already indexed files (default: True)"
+    )
+    
     # Delete command
     delete_parser = subparsers.add_parser("delete", help="Delete documents")
     delete_parser.add_argument(
@@ -471,6 +600,20 @@ async def main():
                 chunk_size=args.chunk_size,
                 overlap=args.overlap,
                 batch_size=args.batch_size,
+            )
+            return 0 if success else 1
+        
+        elif args.command == "smart-upsert":
+            manager = KnowledgeManager(
+                index_dir=args.index_dir,
+                provider=args.provider
+            )
+            success = await manager.smart_upsert_documents(
+                data_dir=args.data_dir,
+                chunk_size=args.chunk_size,
+                overlap=args.overlap,
+                batch_size=args.batch_size,
+                skip_indexed=args.skip_indexed,
             )
             return 0 if success else 1
         

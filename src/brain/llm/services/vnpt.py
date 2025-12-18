@@ -1,11 +1,11 @@
 from src.brain.llm.services.type import LLMService, LLMServiceConfig
-import os
 import json
+import asyncio
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Dict, List, Optional, Any
 from dotenv import load_dotenv
-import requests
 import aiohttp
+from src.brain.llm.services.retry_utils import retry_async
 
 load_dotenv()
 
@@ -16,11 +16,18 @@ MODEL_CONFIG_MAP = {
     "large": 2,
 }
 
+# Cache for config
+_CONFIG_CACHE: Dict[str, Any] = {}
+
 def load_config_from_file(
     config_path: str = "config/vnpt.json",
     model_type: Literal["embedding", "small", "large"] = "embedding",
 ) -> dict:
-    """Load VNPT credentials from JSON config file."""
+    """Load VNPT credentials from JSON config file with caching."""
+    cache_key = f"{config_path}:{model_type}"
+    if cache_key in _CONFIG_CACHE:
+        return _CONFIG_CACHE[cache_key]
+
     project_root = Path(__file__).resolve().parent.parent.parent.parent.parent
     full_path = project_root / config_path
     
@@ -33,12 +40,15 @@ def load_config_from_file(
     config_index = MODEL_CONFIG_MAP.get(model_type, 0)
     config = configs[config_index]
     
-    return {
+    result = {
         "authorization": config["authorization"],
         "token_id": config["tokenId"],
         "token_key": config["tokenKey"],
         "api_name": config["llmApiName"],
     }
+    
+    _CONFIG_CACHE[cache_key] = result
+    return result
 
 
 class VNPTServiceConfig(LLMServiceConfig):
@@ -53,6 +63,7 @@ class VNPTServiceConfig(LLMServiceConfig):
         self.token_id = token_id
         self.token_key = token_key
         self.model = model
+        self.provider = "vnpt"  # Explicitly set provider
 
 
 class VNPTService(LLMService):
@@ -98,46 +109,94 @@ class VNPTService(LLMService):
     async def generate(
         self,
         user_input: str,
+        stream: Optional[bool] = False,
     ) -> str:
+        """Generate response from VNPT AI API with retry logic (3 retries, exponential backoff)"""
+        if stream:
+            raise NotImplementedError("Streaming is not supported by VNPTService yet.")
+        
         try:
-            headers = self._get_headers()
-            json_data = {
-                'model': self.model.replace('-', '_'),
-                'messages': [
-                    {'role': 'user', 'content': user_input}
-                ],
-                'temperature': 1.0,
-                'top_p': 1.0,
-                'top_k': 20,
-                'n': 1,
-                'max_completion_tokens': 1000,
-            }
-            response = requests.post(self.base_url + '/data-service/v1/chat/completions/' + self.model, headers=headers, json=json_data)
-            return response.json()['choices'][0]['message']['content']
+            return await self._generate_with_retry(user_input)
         except Exception as e:
             raise RuntimeError(f"Error generating response from VNPT: {str(e)}")
+    
+    @retry_async(
+        max_retries=3,
+        exceptions=(aiohttp.ClientError, asyncio.TimeoutError, ConnectionError)
+    )
+    async def _generate_with_retry(self, user_input: str) -> str:
+        """Internal method with retry logic for generate()"""
+        headers = self._get_headers()
+        json_data = {
+            'model': self.model.replace('-', '_'),
+            'messages': [
+                {'role': 'user', 'content': user_input}
+            ],
+            'temperature': 1.0,
+            'top_p': 1.0,
+            'top_k': 20,
+            'n': 1,
+            'max_completion_tokens': 1000,
+        }
+        
+        # Create a new session for each request (simple, but creating session is somewhat expensive)
+        # Ideally, we should pass session or manage it in the class. 
+        # For now, using Context Manager is safe and clean.
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                self.base_url + '/data-service/v1/chat/completions/' + self.model,
+                headers=headers,
+                json=json_data,
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as response:
+                response.raise_for_status()
+                data = await response.json()
+                return data['choices'][0]['message']['content']
     
     async def get_embedding(
         self,
         session: aiohttp.ClientSession,
         text: str,
-    ):
+    ) -> List[float]:
+        """Get embedding from VNPT AI API with retry logic (3 retries, exponential backoff)"""
         try:
-            # Always use embedding config for embeddings
-            headers = self._get_headers(model_type="embedding")
-            json_data = {
-                'model': 'vnptai_hackathon_embedding',
-                'input': text,
-                'encoding_format': 'float',
-            }
-            async with session.post(
-                self.base_url + '/data-service/vnptai-hackathon-embedding',
-                headers=headers,
-                json=json_data,
-            ) as response:
-                return await response.json()
+            return await self._get_embedding_with_retry(session, text)
         except Exception as e:
             raise RuntimeError(f"Error getting embedding from VNPT: {str(e)}")
+    
+    @retry_async(
+        max_retries=3,
+        exceptions=(aiohttp.ClientError, asyncio.TimeoutError, ConnectionError)
+    )
+    async def _get_embedding_with_retry(
+        self,
+        session: aiohttp.ClientSession,
+        text: str,
+    ) -> List[float]:
+        """Internal method with retry logic for get_embedding()"""
+        # Always use embedding config for embeddings
+        headers = self._get_headers(model_type="embedding")
+        json_data = {
+            'model': 'vnptai_hackathon_embedding',
+            'input': text,
+            'encoding_format': 'float',
+        }
+        async with session.post(
+            self.base_url + '/data-service/vnptai-hackathon-embedding',
+            headers=headers,
+            json=json_data,
+            timeout=aiohttp.ClientTimeout(total=30)
+        ) as response:
+            response.raise_for_status()
+            data = await response.json()
+            
+            # Parse embedding here
+            if isinstance(data, dict) and 'data' in data:
+                return data['data'][0]['embedding']
+            elif isinstance(data, list):
+                return data
+            else:
+                raise ValueError(f"Unexpected embedding format: {data}")
     
     def get_all_tools(self) -> dict:
         return {}
