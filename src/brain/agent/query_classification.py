@@ -2,8 +2,7 @@ from src.brain.llm.services.type import LLMService
 from loguru import logger
 from typing import Any, Dict
 from src.brain.agent.prompts import QUERY_CLASSIFICATION_PROMPT
-import re
-import json
+from src.brain.utils.json_parser import parse_json_from_llm_response
 
 class QueryClassificationService:
     def __init__(
@@ -40,18 +39,15 @@ class QueryClassificationService:
         self,
         text: str
     ) -> Dict[str, Any]:
-        try:
-            logger.info(f"Parsing JSON answer: {text}")
-            match = re.search(r'\{.*\}', text, re.DOTALL)
-            logger.info(f"Match: {match}")
-            if match:
-                data = json.loads(match.group())
-                return data
-        except Exception as e:
-            logger.error(f"Error parsing JSON answer: {e}")
-            return {
+        """Parse JSON from LLM response with fallback to default classification"""
+        logger.info(f"Parsing JSON answer: {text[:100]}...")
+        return parse_json_from_llm_response(
+            text,
+            default={
                 "category": "RAG",
                 "temporal_constraint": None,
                 "reasoning": "JSON Parsing Error",
                 "key_entities": []
-            }
+            },
+            context="QueryClassification"
+        )

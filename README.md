@@ -472,7 +472,75 @@ ollama_service = OllamaService(
 )
 ```
 
-#### 3.4 System Prompt Initialization
+### 3.4 API Retry Logic
+
+All API calls to external services are protected with automatic retry logic to handle transient failures.
+
+#### Retry Configuration
+
+- **Max Retries**: 3 attempts (4 total tries including initial)
+- **Strategy**: Exponential backoff with jitter
+- **Backoff Times**: ~1s, ~2s, ~4s (±20% randomization to prevent thundering herd)
+- **Max Backoff**: 8 seconds per retry
+- **Total Max Time**: ~15 seconds for all retries
+
+#### Services with Retry Logic
+
+| Service | Method | Retry Type | Exceptions Handled |
+|---------|--------|------------|-------------------|
+| VNPTService | `generate()` | Custom (sync) | RequestException, Timeout, ConnectionError |
+| VNPTService | `get_embedding()` | Custom (async) | ClientError, TimeoutError, ConnectionError |
+| OllamaService | `generate()` | Built-in SDK | Handled by OpenAI client |
+| OllamaService | `get_embedding()` | Custom (sync) | ConnectionError, TimeoutError |
+| AzureService | `generate()` | Built-in SDK | Handled by Azure client |
+| AzureService | `get_embedding()` | Built-in SDK | Handled by Azure client |
+
+#### Example: Retry in Action
+
+```python
+from src.brain.llm.services.vnpt import VNPTService
+
+# Retry happens automatically on API failures
+service = VNPTService(model="vnptai-hackathon-small")
+response = await service.generate("Your question here")
+# If API fails, will retry 3 times with exponential backoff
+```
+
+#### Agent Timeout Configuration
+
+The Agent combines retry logic with overall timeout protection:
+
+```python
+from src.brain.agent.agent import Agent
+
+agent = Agent(llm_service=service)
+
+# Process with 60s timeout (includes all retries)
+result = await agent.process_query(
+    query="Your question",
+    options={"A": "Option A", "B": "Option B"},
+    query_id="q1",
+    timeout=60.0  # Optional, default is 60 seconds
+)
+```
+
+**Timeout Behavior:**
+- Prevents queries from hanging indefinitely
+- Includes time for: embedding, guardrail, classification, task execution, and all retries
+- Returns fallback answer if timeout exceeded
+- Logged with query_id for tracking
+
+#### Retry Logs
+
+Retry attempts are logged automatically with context:
+
+```
+2025-12-18 23:15:42.123 | WARNING | retry_utils:wrapper:54 - _generate_with_retry attempt 1/4 failed: Connection timeout. Retrying in 1.04s...
+2025-12-18 23:15:43.167 | WARNING | retry_utils:wrapper:54 - _generate_with_retry attempt 2/4 failed: Connection timeout. Retrying in 2.20s...
+2025-12-18 23:15:45.370 | INFO | Successfully generated response on attempt 3
+```
+
+#### 3.5 System Prompt Initialization
 
 The `EnhancedPromptManager` loads system instructions from:
 

@@ -3,9 +3,8 @@ from loguru import logger
 import numpy as np
 from typing import Any, Dict, List, Optional, Tuple
 from src.brain.agent.prompts import SAFETY_SELECTOR_PROMPT
-import re
+from src.brain.utils.json_parser import extract_answer_from_response
 from dotenv import load_dotenv
-import json
 import os
 
 load_dotenv()
@@ -121,18 +120,9 @@ class GuardrailService:
         text: str
     ) -> Dict[str, str]:
         """Parse JSON answer from LLM response and return as dict"""
-        try:
-            match = re.search(r'\{.*\}', text, re.DOTALL)
-            logger.info(f"Parsing JSON answer: {text} with options: {options}")
-            
-            if match:
-                data = json.loads(match.group())
-                answer = data.get("answer", "None")
-                return {"answer": answer}
-        except Exception as e:
-            logger.error(f"Error parsing JSON answer: {e}")
-        
-        # Fallback: return first option if available
-        if options:
-            return {"answer": sorted(options.keys())[0]}
-        return {"answer": "A"}
+        logger.info(f"Parsing safety selector answer with options: {options}")
+        return extract_answer_from_response(
+            text,
+            options if options else {},
+            default_answer="A"
+        )

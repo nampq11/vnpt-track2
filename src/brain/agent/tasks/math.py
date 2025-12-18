@@ -5,8 +5,7 @@ from src.brain.agent.tasks.base import BaseTask
 from typing import Dict
 from src.brain.agent.prompts import CHEMISTRY_PROMPT, MATH_PROMPT
 from src.models.tasks.math import DomainMathTask
-import re
-import json
+from src.brain.utils.json_parser import extract_answer_from_response
 
 class MathTask(BaseTask):
     def __init__(
@@ -32,25 +31,7 @@ class MathTask(BaseTask):
 
     def _parse_json_answer(self, text: str, options: Dict[str, str]) -> Dict[str, str]:
         """Extract JSON answer from LLM response."""
-        try:
-            match = re.search(r'\{.*?\}', text, re.DOTALL)
-            if match:
-                data = json.loads(match.group())
-                if "answer" in data:
-                    answer = data["answer"].upper().strip()
-                    if answer in options:
-                        return {"answer": answer}
-        except Exception as e:
-            logger.warning(f"JSON parsing failed: {e}")
-        
-        # Fallback: find first valid option letter
-        text_upper = text.upper()
-        for letter in sorted(options.keys()):
-            if f'"{letter}"' in text_upper or f"'{letter}'" in text_upper:
-                return {"answer": letter}
-        
-        # Last resort: return first option
-        return {"answer": sorted(options.keys())[0]}
+        return extract_answer_from_response(text, options)
 
     async def invoke(
         self,

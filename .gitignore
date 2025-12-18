@@ -20,3 +20,14 @@ data/*.json
 env/
 # uv virtual cache
 .uv
+.claude/
+data/data/
+data/embeddings/
+plans/
+results/
+examples/
+data/
+# Configuration files with credentials
+config/vnpt.json
+config/*.json
+!config/*.example.json

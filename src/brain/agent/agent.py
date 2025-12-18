@@ -1,4 +1,5 @@
 import aiohttp
+import asyncio
 from src.brain.agent.tasks.rag import RAGTask
 from src.brain.llm.services.type import LLMService
 from src.brain.agent.query_classification import QueryClassificationService
@@ -31,11 +32,45 @@ class Agent:
         query: str,
         options: Dict[str, str],
         query_id: str,
+        timeout: float = 60.0,
     ) -> Dict[str, Any]:
+        """
+        Process query with timeout protection.
+        
+        Args:
+            query: User query text
+            options: Answer options (A/B/C/D)
+            query_id: Unique query identifier
+            timeout: Max processing time in seconds (default: 60)
+        
+        Returns:
+            Dict with "answer" key
+        """
+        try:
+            return await asyncio.wait_for(
+                self._process_query_internal(query, options, query_id),
+                timeout=timeout
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"[{query_id}] Query timed out after {timeout}s")
+            # Return safe fallback answer
+            fallback = sorted(options.keys())[0] if options else "A"
+            return {"answer": fallback}
+        except Exception as e:
+            logger.error(f"[{query_id}] Error processing query: {e}")
+            raise e
+    
+    async def _process_query_internal(
+        self,
+        query: str,
+        options: Dict[str, str],
+        query_id: str,
+    ) -> Dict[str, Any]:
+        """Internal query processing logic with 3-layer architecture"""
         start_time = time.time()
 
         try:
-            logger.info(f"Processing query: {query} with options: {options}")
+            logger.info(f"[{query_id}] Processing query: {query[:50]}...")
             # --- LAYER 1: FAST SAFE CHECK ---
             try:
                 async with aiohttp.ClientSession() as session:
@@ -71,20 +106,20 @@ class Agent:
             
             # If guardrail blocked the query, return the safe answer immediately
             if not is_safe:
-                logger.warning(f"Query blocked by guardrail embedding check")
+                logger.warning(f"[{query_id}] Query blocked by guardrail embedding check")
                 # Validate answer is not 'None'
                 if guardrail_answer.get('answer') not in [None, 'None', '']:
                     return guardrail_answer
                 else:
                     # Fallback to first option if guardrail couldn't determine answer
-                    logger.warning(f"Guardrail returned invalid answer, using fallback")
+                    logger.warning(f"[{query_id}] Guardrail returned invalid answer, using fallback")
                     return {"answer": sorted(options.keys())[0]}
             
             # --- LAYER 2: QUERY CLASSIFICATION ---
             classification = await self.query_classification.invoke(
                 query=query,
             )
-            logger.info(f"Query Classification Result: {classification}")
+            logger.info(f"[{query_id}] Query Classification Result: {classification}")
 
             # --- LAYER 3: EXECUTION ---
             if classification['category'] == ScenarioTask.SAFETY:
@@ -120,9 +155,9 @@ class Agent:
                     "answer": "A",
                 }
             
-            logger.debug(f"Task execution result: {result}")
+            logger.debug(f"[{query_id}] Task execution result: {result}")
             return result
                 
         except Exception as e:
-            logger.error(f"Error processing query: {e}")
+            logger.error(f"[{query_id}] Error in internal processing: {e}")
             raise e

@@ -1,0 +1,21 @@
+[
+  {
+    "authorization": "Bearer YOUR_EMBEDDING_AUTHORIZATION_TOKEN_HERE",
+    "tokenId": "YOUR_EMBEDDING_TOKEN_ID_HERE",
+    "tokenKey": "YOUR_EMBEDDING_TOKEN_KEY_HERE",
+    "llmApiName": "vnptai-hackathon-embedding"
+  },
+  {
+    "authorization": "Bearer YOUR_SMALL_MODEL_AUTHORIZATION_TOKEN_HERE",
+    "tokenId": "YOUR_SMALL_MODEL_TOKEN_ID_HERE",
+    "tokenKey": "YOUR_SMALL_MODEL_TOKEN_KEY_HERE",
+    "llmApiName": "vnptai-hackathon-small"
+  },
+  {
+    "authorization": "Bearer YOUR_LARGE_MODEL_AUTHORIZATION_TOKEN_HERE",
+    "tokenId": "YOUR_LARGE_MODEL_TOKEN_ID_HERE",
+    "tokenKey": "YOUR_LARGE_MODEL_TOKEN_KEY_HERE",
+    "llmApiName": "vnptai-hackathon-large"
+  }
+]
+
