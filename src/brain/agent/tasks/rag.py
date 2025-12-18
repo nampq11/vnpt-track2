@@ -1,9 +1,11 @@
+from src.models.tasks.rag import DomainRAGTask
 from src.brain.llm.services.type import LLMService
 from src.brain.llm.services.vnpt import VNPTService
 from loguru import logger
 from src.brain.agent.tasks.base import BaseTask
 from typing import Dict, List, Optional
 from src.brain.agent.prompts import RAG_PROMPT, RAG_PROMPT_WITH_CONTEXT
+from src.brain.agent.domain_mapper import DomainMapper
 import re
 import json
 import os
@@ -32,6 +34,7 @@ class RAGTask(BaseTask):
         
         self.use_retrieval = use_retrieval
         self.retrieval_top_k = retrieval_top_k
+        self.domain_mapper = DomainMapper()
         
         # Initialize retriever if enabled and index exists
         if use_retrieval and retriever is not None:
@@ -139,14 +142,19 @@ class RAGTask(BaseTask):
     async def invoke(
         self,
         query: str,
+        domain: DomainRAGTask,
         options: Dict[str, str],
         temporal_constraint: Optional[int] = None,
         key_entities: Optional[List[str]] = None,
     ) -> Dict[str, str]:
         try:
+            logger.info(f"RAG Task invoked with domain={domain}, query={query[:50]}...")
             choices_str = self._format_choices(options)
             temporal_hint = self._build_temporal_hint(temporal_constraint)
             entities_hint = self._build_entities_hint(key_entities)
+            
+            # Get domain-specific retrieval configuration
+            retrieval_config = self.domain_mapper.get_retrieval_config(domain)
             
             # Attempt retrieval if enabled
             context = ""
@@ -154,21 +162,36 @@ class RAGTask(BaseTask):
                 try:
                     from src.brain.rag.lancedb_retriever import format_retrieval_context
                     
-                    # Infer category filter from classification entities
-                    category_filter = self._infer_category_filter(key_entities)
+                    # --- SMART DOMAIN-AWARE FILTERING ---
+                    # Priority 1: Use domain mapping for category filtering
+                    domain_categories = self.domain_mapper.get_categories_for_domain(domain)
+                    
+                    # Priority 2: Infer categories from entities (fallback)
+                    entity_categories = self._infer_category_filter(key_entities)
+                    
+                    # Merge strategies for optimal filtering
+                    category_filter = self.domain_mapper.merge_with_entity_categories(
+                        domain_categories=domain_categories,
+                        entity_categories=entity_categories,
+                    )
                     
                     if category_filter:
-                        logger.debug(f"Using category filter: {category_filter}")
+                        logger.info(f"Using category filter: {category_filter}")
+                    else:
+                        logger.info("No category filter (searching all categories)")
+                    
+                    # Use domain-specific top_k
+                    effective_top_k = retrieval_config.top_k
                     
                     results = await self.retriever.retrieve(
                         query=query,
-                        top_k=self.retrieval_top_k,
+                        top_k=effective_top_k,
                         categories_filter=category_filter,
                     )
                     
                     if results:
                         context = format_retrieval_context(results)
-                        logger.debug(f"Retrieved {len(results)} chunks for query")
+                        logger.info(f"Retrieved {len(results)} chunks for query (domain={domain})")
                 except Exception as e:
                     logger.warning(f"Retrieval failed: {e}")
             

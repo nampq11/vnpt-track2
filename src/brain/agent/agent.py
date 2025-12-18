@@ -99,6 +99,7 @@ class Agent:
             elif classification['category'] == ScenarioTask.MATH:
                 result = await self.math_task.invoke(
                     query=query,
+                    domain=classification['domain'],
                     options=options,
                 )
             elif classification['category'] == ScenarioTask.READING:
@@ -109,6 +110,7 @@ class Agent:
             elif classification['category'] == ScenarioTask.RAG:
                 result = await self.rag_task.invoke(
                     query=query,
+                    domain=classification['domain'],
                     options=options,
                     temporal_constraint=classification['temporal_constraint'],
                     key_entities=classification['key_entities'],

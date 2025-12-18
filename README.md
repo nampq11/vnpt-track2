@@ -29,6 +29,8 @@ notebooks/          # Data preparation & experiments
 ```
 
 ## Quick Commands
+
+### Inference & Prediction
 ```bash
 # Install dependencies
 uv sync --group development
@@ -47,6 +49,21 @@ uv run python predict.py --mode test --provider ollama --model qwen3:1.7b --n 5
 
 # Start JupyterLab
 uv run jupyter lab
+```
+
+### Knowledge Base Management (NEW)
+```bash
+# Crawl data from Wikipedia
+./bin/crawl.sh -u "https://vi.wikipedia.org/wiki/YOUR_TOPIC" \
+  -c "category_name"
+
+# Update knowledge index (incremental)
+./bin/knowledge.sh upsert --data-dir data/data/category_name --provider azure
+
+# Check index status
+./bin/knowledge.sh info
+
+# See full guide: docs/CRAWL_AND_INDEX_GUIDE.md
 ```
 
 ## CLI Usage
@@ -679,9 +696,23 @@ Processed into LanceDB index:
 
 ## Documentation
 
-- **Agent System**: `src/brain/agent/README.md`
-- **RAG System**: `docs/RAG_USAGE_GUIDE.md`
-- **CLI Tools**: `bin/README.md`, `bin/QUICKSTART.md`
-- **Migration**: `plans/20251217-migrate-faiss-to-lancedb/`
-- **CoT Prompts**: `docs/COT_PROMPTS.md`
+### Core System Documentation
+- **Agent System**: `src/brain/agent/README.md` - Agent architecture and task routing
+- **RAG System**: `docs/RAG_USAGE_GUIDE.md` - RAG usage and configuration
+- **CLI Tools**: `bin/README.md`, `bin/QUICKSTART.md` - Command-line tools
+- **Migration**: `plans/20251217-migrate-faiss-to-lancedb/` - LanceDB migration guide
+- **CoT Prompts**: `docs/COT_PROMPTS.md` - Chain-of-Thought prompting
+
+### Domain-Aware RAG System (NEW)
+- **📚 Complete Guide**: [`docs/CRAWL_AND_INDEX_GUIDE.md`](docs/CRAWL_AND_INDEX_GUIDE.md) - Full workflow for crawling & indexing
+- **🚀 Quick Start**: [`docs/QUICK_START_CRAWL.md`](docs/QUICK_START_CRAWL.md) - Quick reference cheat sheet
+- **💡 Working Example**: [`examples/add_politics_data_example.sh`](examples/add_politics_data_example.sh) - Complete POLITICS domain example
+- **🎯 Implementation**: [`plans/20251218-domain-aware-rag/`](plans/20251218-domain-aware-rag/) - Technical implementation details
+
+### Key Features (Domain-Aware RAG)
+- ✅ **6 Domains**: LAW, HISTORY, GEOGRAPHY, CULTURE, **POLITICS** (new), GENERAL_KNOWLEDGE
+- ✅ **31 Categories**: Mapped to appropriate domains for intelligent filtering
+- ✅ **Domain-Specific Retrieval**: Optimized top_k, vector/FTS weights per domain
+- ✅ **Smart Filtering**: Priority-based category selection (Domain → Entity → All)
+- ✅ **Easy Data Addition**: Crawl from web → Index → Query (3 steps)
 

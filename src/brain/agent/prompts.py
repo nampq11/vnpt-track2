@@ -12,7 +12,7 @@ OUTPUT FORMAT:
     "category": "MATH" | "READING" | "RAG" | "SAFETY",
     "temporal_constraint": integer or null, // Extract specific year mentioned (e.g., 2024, 2025) for
     Law filtering,
-    "domain": ("Law" | "History" | "Geography" | "Culture" | "General Knowledge" in RAG) or ("Math", "Physics", "Chemistry", "Biology", "Logic", "Programming")
+    "domain": ("Law" | "Politics" | "History" | "Geography" | "Culture" | "General Knowledge" in RAG) or ("Math", "Physics", "Chemistry", "Biology", "Logic", "Programming")
     "key_entities": ["list", "of", "important", "keywords"] // Extract keywords for search
 }}
 
@@ -127,14 +127,6 @@ Instructions:
        • Real quantities vs nominal values
        • Physical output vs monetary value
    - Reject options that confuse units (e.g. "USD" for real output).
-4b. VIETNAMESE CHEMISTRY TERMINOLOGY (if applicable):
-   - "Thuỷ luyện" (hydrometallurgy) in Vietnamese chemistry textbooks specifically refers to:
-       • Hydrogen reduction: H₂ + metal oxide → metal + H₂O (PRIMARY definition)
-       • NOT metal displacement in solution (that's cementation, a separate category)
-   - If question asks "điều chế Cu theo phương pháp thuỷ luyện":
-       • Choose H₂ reduction over Zn displacement
-       • Example: H₂ + CuO → Cu + H₂O is the textbook answer for "thuỷ luyện"
-   - This follows Vietnamese educational standards, which differ from international definitions
 5. OPTION EVALUATION:
    - Evaluate each option against the model implications,
      not just arithmetic results.
@@ -155,6 +147,94 @@ Output Format:
 
 Requirement: Respond with ONLY the valid JSON object.
 """
+
+
+CHEMISTRY_PROMPT = """You are a highly accurate Chemistry Reasoning Engine.
+Your task is to solve the user's chemistry problem and select the correct option from the provided choices.
+
+Query: {query}
+
+Choices:
+{choices}
+
+Instructions:
+<chemistry_instructions>
+1. CLASSIFY THE TASK:
+   - Determine whether the question asks for:
+     (a) A stoichiometric / numerical calculation
+     (b) A theoretical interpretation / best explanation
+     (c) A comparison of reactions, methods, or conditions
+   - If wording includes "giải thích đúng nhất", "giải thích tốt nhất",
+     prioritize chemical principles over mechanical calculation.
+
+2. IDENTIFY THE CHEMICAL MODEL:
+   - Identify the core chemistry involved:
+       • Redox reactions
+       • Acid–base theory
+       • Electrochemistry
+       • Thermochemistry
+       • Organic reaction mechanisms
+       • Periodic trends
+   - Write the correct chemical equations if applicable.
+   - Identify reaction conditions (temperature, catalyst, medium).
+
+3. ASSUMPTION CONTROL:
+   - Do NOT assume all reactions occur completely unless stated.
+   - Apply Vietnamese textbook conventions unless explicitly overridden.
+   - Examples:
+       • Weak acids/bases do NOT fully dissociate.
+       • Solubility rules follow SGK phổ thông.
+       • Standard conditions are assumed if not specified.
+
+4. UNIT & MEANING CHECK:
+   - Distinguish clearly between:
+       • mol, gram, volume, concentration
+       • theoretical yield vs actual yield
+       • reactant vs product
+   - Eliminate options that:
+       • Use incorrect units
+       • Confuse mass with amount
+       • Confuse reaction type or role of substances
+
+5. VIETNAMESE CHEMISTRY TERMINOLOGY (CRITICAL):
+   - Interpret terms strictly according to Vietnamese high-school textbooks:
+       • "Thuỷ luyện" = khử oxit kim loại bằng H₂
+         (ví dụ: H₂ + CuO → Cu + H₂O)
+       • Phản ứng kim loại đẩy kim loại khỏi dung dịch
+         KHÔNG được gọi là thuỷ luyện (đó là phản ứng thế / cementation).
+       • "Nhiệt luyện" = khử bằng C, CO, hoặc nhiệt độ cao.
+       • "Điện phân" chỉ đúng khi có dòng điện ngoài.
+   - When conflicts exist, always prioritize SGK Việt Nam over international usage.
+
+6. OPTION EVALUATION:
+   - Evaluate each option against:
+       • Chemical laws
+       • Reaction feasibility
+       • Proper terminology
+       • Stoichiometric consistency
+   - Eliminate answers that are:
+       • Chemically impossible
+       • Correct numerically but wrong in interpretation
+       • Using incorrect textbook definitions
+
+7. VERIFY:
+   - Ensure the selected option satisfies BOTH:
+       • Chemical correctness
+       • Educational correctness (the way it is taught in Vietnam)
+
+8. FORMAT:
+   - Respond with a strict JSON object only.
+</chemistry_instructions>
+
+Output Format:
+{{
+  "step_by_step_reasoning": "Step 1: Identify reaction type... Step 2: Write balanced equation... Step 3: Analyze each option... Conclusion: Option B matches both theory and stoichiometry.",
+  "answer": "B" // Must be one of: A, B, C, D
+}}
+
+Requirement: Respond with ONLY the valid JSON object.
+"""
+
 
 READING_PROMPT = """You are an expert at reading comprehension for Vietnamese text.
 
