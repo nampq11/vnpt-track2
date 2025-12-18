@@ -36,7 +36,6 @@ class QuestionProcessor:
         - Non-empty strings
         - Don't start with LaTeX symbols (=, &, \\, $$)
         - Don't end with question marks (those are question continuations)
-        - Are reasonably substantive (length > 5)
         """
         if len(choices) <= 4:
             # Standard format, no cleaning needed
@@ -58,11 +57,8 @@ class QuestionProcessor:
             # Check if it's a question fragment (ends with ?)
             is_question = stripped.endswith('?')
             
-            # Check if very short (likely not complete choice)
-            is_too_short = len(stripped) < 5
-            
             # If it looks like question content, add to question_parts
-            if is_latex or is_question or is_too_short:
+            if is_latex or is_question:
                 question_parts.append(choice)
             else:
                 # Otherwise it's a real choice

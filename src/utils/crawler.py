@@ -35,13 +35,18 @@ class WebCrawler:
         self.max_retries = max_retries
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
             'Accept-Encoding': 'gzip, deflate, br',
             'DNT': '1',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0',
         })
     
     async def close(self):
@@ -75,30 +80,87 @@ class WebCrawler:
             Markdown formatted text
         """
         markdown_lines = []
+        processed_elements = set()  # Track processed elements to avoid duplicates
         
-        for element in soup.descendants:
+        # Process elements in document order (direct children first)
+        for element in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'blockquote', 'ul', 'ol', 'pre', 'div']):
+            # Skip if already processed as part of parent
+            if id(element) in processed_elements:
+                continue
+                
             if element.name == 'h1':
-                markdown_lines.append(f"\n=== {element.get_text().strip()} ===\n")
+                text = element.get_text().strip()
+                if text:
+                    markdown_lines.append(f"\n=== {text} ===\n")
+                    processed_elements.add(id(element))
+                    
             elif element.name == 'h2':
-                markdown_lines.append(f"\n  === {element.get_text().strip()} ===")
+                text = element.get_text().strip()
+                if text:
+                    markdown_lines.append(f"\n  === {text} ===\n")
+                    processed_elements.add(id(element))
+                    
             elif element.name == 'h3':
-                markdown_lines.append(f"\n    === {element.get_text().strip()} ===")
+                text = element.get_text().strip()
+                if text:
+                    markdown_lines.append(f"\n    === {text} ===\n")
+                    processed_elements.add(id(element))
+                    
+            elif element.name in ['h4', 'h5', 'h6']:
+                text = element.get_text().strip()
+                if text:
+                    markdown_lines.append(f"\n      === {text} ===\n")
+                    processed_elements.add(id(element))
+                    
             elif element.name == 'p':
+                # Skip if this p is inside a blockquote or list (will be processed with parent)
+                if element.find_parent(['blockquote', 'li']):
+                    continue
                 text = element.get_text().strip()
-                if text:
+                if text and len(text) > 10:  # Skip very short paragraphs (likely navigation)
                     markdown_lines.append(f"{text}\n")
-            elif element.name == 'li':
-                text = element.get_text().strip()
-                if text:
-                    markdown_lines.append(f"  - {text}")
+                    processed_elements.add(id(element))
+                    
             elif element.name == 'blockquote':
                 text = element.get_text().strip()
                 if text:
-                    # Add quote formatting
-                    quoted = '\n'.join(f'"{line}"' for line in text.split('\n') if line.strip())
-                    markdown_lines.append(f"\n{quoted}\n")
+                    # Add quote formatting with proper indentation
+                    lines = [line.strip() for line in text.split('\n') if line.strip()]
+                    for line in lines:
+                        markdown_lines.append(f"> {line}")
+                    markdown_lines.append("")  # Add blank line after quote
+                    processed_elements.add(id(element))
+                    
+            elif element.name in ['ul', 'ol']:
+                # Process list items
+                for li in element.find_all('li', recursive=False):
+                    text = li.get_text().strip()
+                    if text:
+                        markdown_lines.append(f"  - {text}")
+                        processed_elements.add(id(li))
+                markdown_lines.append("")  # Add blank line after list
+                processed_elements.add(id(element))
+                
+            elif element.name == 'pre':
+                text = element.get_text().strip()
+                if text:
+                    markdown_lines.append(f"\n```\n{text}\n```\n")
+                    processed_elements.add(id(element))
+                    
+            elif element.name == 'div':
+                # Only process div if it has direct text content (not just children)
+                direct_text = ''.join([str(s) for s in element.strings if s.parent == element]).strip()
+                if direct_text and len(direct_text) > 20:
+                    markdown_lines.append(f"{direct_text}\n")
+                    processed_elements.add(id(element))
         
-        return '\n'.join(markdown_lines)
+        # Join and clean up
+        markdown = '\n'.join(markdown_lines)
+        
+        # Clean up excessive whitespace
+        markdown = re.sub(r'\n{3,}', '\n\n', markdown)
+        
+        return markdown.strip()
     
     def _fetch_wikipedia_via_api(self, title: str, lang: str = 'vi') -> Optional[tuple[str, str]]:
         """Fetch Wikipedia content via API.
@@ -186,21 +248,81 @@ class WebCrawler:
         """
         soup = BeautifulSoup(html, 'html.parser')
         
-        # Extract title
-        title_elem = soup.find('title') or soup.find('h1')
-        title = title_elem.get_text().strip() if title_elem else "Untitled"
+        # Extract title - try multiple strategies
+        title = "Untitled"
         
-        # Remove unwanted elements
-        for unwanted in soup.find_all(['script', 'style', 'nav', 'header', 'footer', 'aside']):
-            unwanted.decompose()
+        # Try h1 with specific class first
+        h1_title = soup.find('h1', class_=re.compile(r'title|entry-title|post-title|article-title'))
+        if h1_title:
+            title = h1_title.get_text().strip()
+        else:
+            # Try any h1
+            h1_elem = soup.find('h1')
+            if h1_elem:
+                title = h1_elem.get_text().strip()
+            else:
+                # Fall back to title tag
+                title_elem = soup.find('title')
+                if title_elem:
+                    title = title_elem.get_text().strip()
+                    # Clean up title (remove site name)
+                    if '|' in title:
+                        title = title.split('|')[0].strip()
+                    elif '–' in title:
+                        title = title.split('–')[0].strip()
+                    elif '-' in title and len(title.split('-')) <= 3:
+                        title = title.split('-')[0].strip()
         
-        # Find main content
-        main_content = soup.find('main') or soup.find('article') or soup.find('body')
+        # First, try to find the main content container
+        main_content = None
+        
+        # Strategy 1: Look for article or post content with specific classes
+        content_selectors = [
+            ('article', {'class': re.compile(r'post|entry|article|content', re.I)}),
+            ('div', {'class': re.compile(r'post-content|entry-content|article-content|main-content|page-content|elementor.*post', re.I)}),
+            ('div', {'id': re.compile(r'post|entry|article|content|main', re.I)}),
+            ('main', {}),
+            ('article', {}),
+        ]
+        
+        for tag, attrs in content_selectors:
+            main_content = soup.find(tag, attrs)
+            if main_content:
+                break
+        
+        # Strategy 2: If still not found, look for the largest div with substantial text
+        if not main_content:
+            all_divs = soup.find_all('div')
+            if all_divs:
+                # Filter divs that have enough text content (likely to be main content)
+                content_divs = [d for d in all_divs if len(d.get_text(strip=True)) > 500]
+                if content_divs:
+                    main_content = max(content_divs, key=lambda d: len(d.get_text(strip=True)))
+        
+        # Strategy 3: Fall back to body
+        if not main_content:
+            main_content = soup.find('body')
         
         if not main_content:
             return title, ""
         
+        # Now clean up unwanted elements ONLY from the main content
+        for unwanted in main_content.find_all(['script', 'style', 'iframe', 'noscript']):
+            unwanted.decompose()
+        
+        # Remove navigation elements that are inside the main content
+        for unwanted in main_content.find_all(['nav']):
+            unwanted.decompose()
+        
+        # Remove specific navigation/menu classes (be very specific)
+        for unwanted in main_content.find_all(class_=re.compile(r'(^menu-|^nav-|comment-form|breadcrumb)', re.I)):
+            unwanted.decompose()
+        
         markdown_content = self._html_to_markdown(main_content)
+        
+        # Clean up excessive whitespace
+        markdown_content = re.sub(r'\n{3,}', '\n\n', markdown_content)
+        markdown_content = markdown_content.strip()
         
         return title, markdown_content
     
@@ -271,7 +393,19 @@ class WebCrawler:
                     await asyncio.sleep(2 ** attempt)
         
         if not content.strip():
+            # Check if this might be a JavaScript-rendered site
             print(f"⚠️  No content extracted from {url}")
+            
+            # Try to detect if it's a JS-heavy site
+            html_to_check = response.text if 'response' in locals() else ""
+            if html_to_check:
+                has_elementor = 'elementor' in html_to_check.lower()
+                has_react = 'react' in html_to_check.lower() or '__NEXT_DATA__' in html_to_check
+                has_vue = 'vue' in html_to_check.lower() or 'data-v-' in html_to_check
+                
+                if has_react or has_vue or has_elementor:
+                    print(f"💡 This site appears to use JavaScript frameworks (React/Vue/Elementor)")
+                    print(f"💡 Try: 1) Save page manually in browser, 2) Look for RSS feed, 3) Use browser automation")
             return None
         
         # Create output directory
