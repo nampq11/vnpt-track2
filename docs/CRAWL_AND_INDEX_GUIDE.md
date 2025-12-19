@@ -473,7 +473,7 @@ mkdir -p data/data/your_category_name
 **Check**:
 ```bash
 # Verify provider configuration
-cat config/vnpt.json  # For VNPT
+cat config/api-keys.json  # For VNPT
 # or check Azure credentials in .env
 
 # Check disk space

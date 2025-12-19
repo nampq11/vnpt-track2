@@ -1,6 +1,7 @@
 """Main inference pipeline for question answering"""
 import asyncio
 import csv
+import time
 from typing import List, Optional, Literal
 from dataclasses import asdict
 import json
@@ -64,6 +65,7 @@ Cuối cùng, cho biết rõ ràng đáp án bạn chọn (A, B, C hoặc D)."""
         async def process_one(question: Question) -> PredictionResult:
             nonlocal completed
             async with semaphore:
+                start_time = time.time()
                 try:
                     if self.use_agent:
                         # Format choices as dict
@@ -90,21 +92,25 @@ Cuối cùng, cho biết rõ ràng đáp án bạn chọn (A, B, C hoặc D)."""
                         )
                         answer = self.processor.parse_answer(response)
                     
+                    inference_time = time.time() - start_time
                     completed += 1
                     if completed % 5 == 0 or completed == total:
                         print(f"Progress: {completed}/{total} ({completed/total:.1%})")
                     
                     return PredictionResult(
                         qid=question.qid,
-                        predicted_answer=answer
+                        predicted_answer=answer,
+                        inference_time=inference_time
                     )
                     
                 except Exception as e:
+                    inference_time = time.time() - start_time
                     logger.error(f"Error processing question {question.qid}: {e}")
                     completed += 1
                     return PredictionResult(
                         qid=question.qid,
-                        predicted_answer='A'
+                        predicted_answer='A',
+                        inference_time=inference_time
                     )
 
         tasks = [process_one(q) for q in questions]
@@ -127,6 +133,20 @@ Cuối cùng, cho biết rõ ràng đáp án bạn chọn (A, B, C hoặc D)."""
                 writer.writerow([pred.qid, pred.predicted_answer])
         
         print(f"\nPredictions saved to {output_file}")
+    
+    def save_predictions_time_csv(
+        self,
+        predictions: List[PredictionResult],
+        output_file: str
+    ) -> None:
+        """Save predictions with time to CSV file with qid,answer,time header"""
+        with open(output_file, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['qid', 'answer', 'time'])
+            for pred in predictions:
+                writer.writerow([pred.qid, pred.predicted_answer, f"{pred.inference_time:.4f}"])
+        
+        print(f"\nPredictions with time saved to {output_file}")
 
     def save_predictions(
         self,
@@ -229,6 +249,14 @@ async def run_pipeline(
     
     # Save predictions
     pipeline.save_predictions(predictions, output_file)
+    
+    # If output is CSV, also save submission_time.csv (BTC requirement)
+    if output_file.endswith('.csv'):
+        time_output_file = output_file.replace('.csv', '_time.csv')
+        # For submission, use fixed name submission_time.csv
+        if output_file == 'submission.csv':
+            time_output_file = 'submission_time.csv'
+        pipeline.save_predictions_time_csv(predictions, time_output_file)
     
     # Evaluate if requested
     if evaluate:

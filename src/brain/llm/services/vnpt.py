@@ -20,7 +20,7 @@ MODEL_CONFIG_MAP = {
 _CONFIG_CACHE: Dict[str, Any] = {}
 
 def load_config_from_file(
-    config_path: str = "config/vnpt.json",
+    config_path: str = "config/api-keys.json",
     model_type: Literal["embedding", "small", "large"] = "embedding",
 ) -> dict:
     """Load VNPT credentials from JSON config file with caching."""
@@ -73,7 +73,7 @@ class VNPTService(LLMService):
         base_url: str = "https://api.idg.vnpt.vn",
         model: str = "vnptai-hackathon-small",
         model_type: Literal["embedding", "small", "large"] = "small",
-        config_path: str = "config/vnpt.json",
+        config_path: str = "config/api-keys.json",
     ) -> None:
         self.base_url = base_url
         self.model = model

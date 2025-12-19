@@ -2,7 +2,7 @@
 # VNPT Track 2 - Submission Inference Script
 # This script runs the complete pipeline for submission:
 # - Reads from /code/private_test.json (mounted by BTC)
-# - Outputs submission.csv (required format)
+# - Outputs submission.csv and submission_time.csv (required format)
 
 set -e  # Exit on error
 
@@ -33,14 +33,14 @@ fi
 # Run inference pipeline
 # - Mode: inference (no evaluation)
 # - Input: /code/private_test.json
-# - Output: submission.csv (root level)
+# - Output: submission.csv and submission_time.csv (root level)
 # - Provider: vnpt (default)
 # - Use agent: True (enabled)
 # - Batch size: 6 (optimal for 4-8 threads as recommended by BTC)
 echo ""
 echo "🚀 Starting inference pipeline..."
 echo "   Input:  $INPUT_FILE"
-echo "   Output: submission.csv"
+echo "   Output: submission.csv, submission_time.csv"
 echo "   Provider: vnpt"
 echo "   Agent mode: enabled"
 echo "   Batch size: 6 threads (optimal for 4-8 range)"
@@ -54,21 +54,34 @@ python predict.py \
     --use-agent \
     --batch-size 6
 
-# Verify output file exists
+# Verify output files exist
 if [ ! -f "submission.csv" ]; then
     echo ""
     echo "❌ Error: submission.csv was not generated!"
     exit 1
 fi
 
-# Verify CSV format (check header)
+if [ ! -f "submission_time.csv" ]; then
+    echo ""
+    echo "❌ Error: submission_time.csv was not generated!"
+    exit 1
+fi
+
+# Verify CSV format (check headers)
 if ! head -1 submission.csv | grep -q "qid,answer"; then
     echo ""
     echo "⚠️  Warning: CSV header may be incorrect. Expected: qid,answer"
 fi
 
+if ! head -1 submission_time.csv | grep -q "qid,answer,time"; then
+    echo ""
+    echo "⚠️  Warning: submission_time.csv header may be incorrect. Expected: qid,answer,time"
+fi
+
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
-echo "✅ Inference complete! Output saved to: submission.csv"
+echo "✅ Inference complete!"
+echo "   - Output saved to: submission.csv"
+echo "   - Time tracking saved to: submission_time.csv"
 echo "═══════════════════════════════════════════════════════════════"
 

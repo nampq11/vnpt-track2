@@ -1,5 +1,75 @@
 # VNPT Track 2 - Vietnamese QA Agent
 
+## Hướng dẫn chạy nhanh cho Ban Tổ Chức
+
+### 1. Pull Docker Image
+```bash
+docker pull nampham11062002/bias_submission:latest
+```
+
+### 2. Cấu hình API Keys
+
+Ban Tổ Chức cần tạo file `api-keys.json` với format sau:
+
+```json
+[
+  {
+    "authorization": "Bearer YOUR_EMBEDDING_TOKEN",
+    "tokenId": "YOUR_EMBEDDING_TOKEN_ID",
+    "tokenKey": "YOUR_EMBEDDING_TOKEN_KEY",
+    "llmApiName": "vnptai-hackathon-embedding"
+  },
+  {
+    "authorization": "Bearer YOUR_SMALL_MODEL_TOKEN",
+    "tokenId": "YOUR_SMALL_MODEL_TOKEN_ID",
+    "tokenKey": "YOUR_SMALL_MODEL_TOKEN_KEY",
+    "llmApiName": "vnptai-hackathon-small"
+  },
+  {
+    "authorization": "Bearer YOUR_LARGE_MODEL_TOKEN",
+    "tokenId": "YOUR_LARGE_MODEL_TOKEN_ID",
+    "tokenKey": "YOUR_LARGE_MODEL_TOKEN_KEY",
+    "llmApiName": "vnptai-hackathon-large"
+  }
+]
+```
+
+**Lưu ý:** File này chứa thông tin nhạy cảm, không commit vào git.
+
+### 3. Chạy Container
+
+**Option A: Mount file api-keys.json trực tiếp**
+```bash
+docker run --gpus all \
+  -v $(pwd)/data/private_test.json:/code/private_test.json \
+  -v $(pwd)/api-keys.json:/code/config/api-keys.json \
+  nampham11062002/bias_submission:latest
+```
+
+**Option B: Mount cả thư mục config** (khuyến nghị)
+Chú ý: đưa file api-keys.json vào thư mục config của project.
+```bash
+docker run --gpus all \
+  -v $(pwd)/data/private_test.json:/code/private_test.json \
+  -v $(pwd)/config:/code/config \
+  nampham11062002/bias_submission:latest
+```
+
+**Kết quả:**
+- Input phải mount tại `/code/private_test.json`
+- File `submission.csv` sẽ được tạo trong `/code/` (root của container)
+- Để lấy file ra ngoài, mount thêm volume: `-v $(pwd)/results:/code/results` và chỉnh output path
+
+### 4. Tự Build Image (Tuỳ chọn)
+
+```bash
+docker build -t team_submission .
+docker run --gpus all \
+  -v $(pwd)/data/private_test.json:/code/private_test.json \
+  -v $(pwd)/config:/code/config \
+  team_submission
+```
+
 ## Purpose
 LLM-based agent for Vietnamese multiple-choice question answering. Built for VNPT Hackathon Track 2.
 
@@ -46,7 +116,7 @@ src/brain/
 ├── system_prompt/  # Prompt generation
 └── config.py       # Configuration classes
 data/               # QA datasets (val.json, test.json)
-config/             # API credentials (vnpt.json)
+config/             # API credentials (api-keys.json)
 tests/              # Integration tests
 notebooks/          # Data preparation & experiments
 ```
@@ -229,7 +299,7 @@ The Vietnamese QA Agent follows a processing pipeline that transforms user quest
 │              4. LLM SERVICE INITIALIZATION                           │
 │                                                                       │
 │  • VNPTService setup (Primary):                                      │
-│    - Load credentials from config/vnpt.json                          │
+│    - Load credentials from config/api-keys.json                      │
 │    - Configure model: vnptai-hackathon-small/large                   │
 │    - Set up authentication headers (Bearer token, token-id/key)      │
 │                                                                       │
@@ -451,7 +521,7 @@ The system uses VNPT AI API as the primary LLM backend for the hackathon.
 
 **Configuration:**
 
-Create `config/vnpt.json` with your API credentials:
+Create `config/api-keys.json` with your API credentials:
 
 ```json
 [
@@ -835,7 +905,7 @@ submission.csv (output)
 - [ ] Python 3.11+ installed
 - [ ] `uv` package manager installed (or use `pip` with `requirements.txt`)
 - [ ] Project dependencies installed: `uv sync --group development` OR `pip install -r requirements.txt`
-- [ ] VNPT API credentials configured in `config/vnpt.json`
+- [ ] VNPT API credentials configured in `config/api-keys.json`
 - [ ] System prompt file exists: `src/brain/system_prompt/files/system.md`
 - [ ] Data files present: `data/val.json` and `data/test.json`
 - [ ] Knowledge base initialized: `data/embeddings/knowledge/knowledge.lance/` (pre-built in Docker)
@@ -857,7 +927,7 @@ submission.csv (output)
 **VNPT API Issues:**
 ```bash
 # Verify config file exists and has correct format
-cat config/vnpt.json | python -m json.tool
+cat config/api-keys.json | python -m json.tool
 
 # Test VNPT connection (if you have curl)
 curl -X POST https://api.idg.vnpt.vn/data-service/v1/chat/completions/vnptai-hackathon-small \
@@ -1091,8 +1161,8 @@ docker run --gpus all \
 
 **API Credentials:**
 The system requires VNPT AI API credentials. In Docker environment:
-- Option A: Mount config file: `-v /path/to/config/vnpt.json:/code/config/vnpt.json`
-- Option B: Use environment variables (if implemented)
+- Option A: Mount config file: `-v /path/to/api-keys.json:/code/config/api-keys.json`
+- Option B: Mount config directory: `-v /path/to/config:/code/config` (recommended)
 
 **Knowledge Base:**
 - Pre-built LanceDB index included in image at `data/embeddings/knowledge/`

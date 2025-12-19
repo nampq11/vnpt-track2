@@ -19,6 +19,7 @@ class PredictionResult:
     qid: str
     predicted_answer: str
     confidence: float = 0.0
+    inference_time: float = 0.0  # Time in seconds for inference
 
 
 class QuestionProcessor:

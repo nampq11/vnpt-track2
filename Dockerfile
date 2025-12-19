@@ -43,7 +43,7 @@ COPY --from=builder /app/.venv .venv
 # Copy source code (changes frequently, so copy last)
 COPY src/ src/
 COPY predict.py .
-COPY inference.sh .
+COPY bin/ bin/
 
 # Copy knowledge base (needed at runtime)
 # Knowledge base is large (~435MB) but needed for RAG
@@ -52,12 +52,12 @@ COPY data/embeddings/ data/embeddings/
 # Create config directory (can be mounted at runtime with -v)
 RUN mkdir -p config
 
-# Make inference.sh executable
-RUN chmod +x inference.sh
+# Make submission script executable
+RUN chmod +x bin/submission_inference.sh
 
 # ============================================================
 # EXECUTION
-# Pipeline reads /code/private_test.json and outputs submission.csv
+# Pipeline reads /code/private_test.json and outputs submission.csv & submission_time.csv
 # ============================================================
-CMD ["bash", "inference.sh"]
+CMD ["bash", "bin/submission_inference.sh"]
 

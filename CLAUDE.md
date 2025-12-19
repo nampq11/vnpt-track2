@@ -20,7 +20,7 @@ src/brain/
 ├── system_prompt/  # Prompt generation
 └── config.py       # Configuration classes
 data/               # QA datasets (val.json, test.json)
-config/             # API credentials (vnpt.json)
+config/             # API credentials (api-keys.json)
 tests/              # Integration tests
 ```
 
