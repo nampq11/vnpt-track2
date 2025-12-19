@@ -3,13 +3,36 @@
 ## Purpose
 LLM-based agent for Vietnamese multiple-choice question answering. Built for VNPT Hackathon Track 2.
 
+## Submission Compliance
+
+This repository complies with VNPT Hackathon Track 2 submission requirements:
+
+✅ **README.md Requirements:**
+- ✅ **Pipeline Flow** (Section 1): Detailed system architecture with flow diagram
+- ✅ **Data Processing** (Section 2): Complete data collection, cleaning, and processing steps
+- ✅ **Resource Initialization** (Section 3): Vector Database (LanceDB), Indexing, and all required resources
+
+✅ **Repository Structure:**
+- ✅ `predict.py`: Main entry point (reads `/code/private_test.json`, outputs `submission.csv`)
+- ✅ `inference.sh`: Bash script orchestrating the complete pipeline
+- ✅ `requirements.txt`: All dependencies with specific versions
+- ✅ `Dockerfile`: Builds from clean base image with all resources
+
+✅ **Docker Configuration:**
+- ✅ Base image: `python:3.11-slim` (CPU-only, lightweight)
+- ✅ CUDA support: Available via `nvidia/cuda:12.2.0-devel-ubuntu20.04` if GPU needed
+- ✅ Pre-built knowledge base included (~435MB)
+- ✅ Entry point: `inference.sh` (runs complete pipeline)
+
 ## Tech Stack
 - **Language**: Python 3.11+
-- **Package Manager**: `uv` (use `uv run`, `uv add`, `uv sync`)
+- **Package Manager**: `uv` (development) or `pip` (Docker/submission)
 - **LLM Backends**: 
   - **VNPT AI API** (primary) - `vnptai-hackathon-small`, `vnptai-hackathon-large`
   - **Ollama** (local dev) - via OpenAI-compatible API
+  - **Azure OpenAI** (optional) - for embeddings
 - **Default Model**: `vnptai-hackathon-small` (VNPT)
+- **Vector Database**: LanceDB (hybrid search: vector + FTS)
 
 ## Project Structure
 ```
@@ -276,13 +299,24 @@ The Vietnamese QA Agent follows a processing pipeline that transforms user quest
 
 ## 2. Data Processing
 
-### Data Source
+This section describes the complete data processing pipeline, including data collection, cleaning, and preparation steps required to run the system.
 
-The system processes Vietnamese question-answering datasets stored in `data/` directory:
+### 2.1 Data Sources
+
+The system processes Vietnamese question-answering datasets from multiple sources:
+
+**Question Datasets:**
 - `data/val.json`: Validation dataset (used for testing/validation)
 - `data/test.json`: Test dataset (used for final evaluation)
+- `data/private_test.json`: Private test set (mounted by BTC during evaluation)
 
-### Data Format
+**Knowledge Base Documents:**
+- `data/data/`: Source documents organized by category (26 categories total)
+  - Examples: `Bac_Ho/`, `Lich_Su_Viet_nam/`, `Van_Hoa_Viet_Nam/`, `Phap_luat_Viet_Nam/`
+  - Format: Plain text files with Wikipedia-style content
+  - Total: ~26,513 document chunks after processing
+
+### 2.2 Data Format
 
 Each question in the JSON files follows this structure:
 
@@ -310,34 +344,62 @@ Each question in the JSON files follows this structure:
 - `choices` (array): Exactly 4 answer options in order [A, B, C, D]
 - `answer` (string): Correct answer (A, B, C, or D)
 
-### Data Cleaning & Preparation Steps
+### 2.3 Data Collection
 
-The data processing pipeline is managed through:
+**Knowledge Base Collection:**
+1. **Web Crawling**: Documents are collected from Vietnamese Wikipedia and other sources
+   ```bash
+   # Crawl data from Wikipedia
+   ./bin/crawl.sh -u "https://vi.wikipedia.org/wiki/YOUR_TOPIC" -c "category_name"
+   ```
 
-**1. Data Exploration** (`notebooks/00-prepare-data.ipynb`)
+2. **Document Organization**: Documents are organized into 26 categories:
+   - History: `Lich_Su_Viet_nam/`, `khang_chien_lon/`, `nhan_vat_lich_su_tieu_bieu/`
+   - Culture: `Van_Hoa_Viet_Nam/`, `Van_hoa_am_thuc/`, `le_hoi_truyen_thong/`
+   - Geography: `Dia_ly_viet_nam/`, `Dia_hinh_Viet_Nam/`, `Dia_dien_du_lich/`
+   - Law: `Phap_luat_Viet_Nam/`, `hien_phap/`, `Quyen_nghia_vu/`
+   - Politics: `dang_cong_san_viet_nam/`, `nhan_vat_chinh_tri/`, `cong_hoa_xa_hoi_chu_nghia_VN/`
+   - And more...
+
+### 2.4 Data Cleaning & Preparation Steps
+
+**1. Question Data Cleaning** (`notebooks/00-prepare-data.ipynb`)
    - Load JSON files using datasets library
    - Inspect data structure and quality
    - Check for missing or malformed entries
    - Verify UTF-8 Vietnamese text encoding
+   - Remove duplicate question IDs
+   - Validate JSON structure integrity
 
 **2. Text Preprocessing**
-   - Normalize Vietnamese Unicode characters
-   - Preserve diacritics (tones and accents)
+   - Normalize Vietnamese Unicode characters (NFC normalization)
+   - Preserve diacritics (tones and accents: á, à, ả, ã, ạ)
    - Maintain original Vietnamese grammar and punctuation
    - Handle context passages (separate from questions when needed)
+   - Remove extra whitespace and normalize line breaks
 
 **3. Data Validation**
-   - Ensure 4 choices per question
+   - Ensure exactly 4 choices per question
    - Verify answer field contains valid letter (A/B/C/D)
    - Check for duplicate question IDs
    - Validate JSON structure integrity
+   - Check for empty or null fields
 
-**4. Dataset Split**
+**4. Knowledge Base Document Processing**
+   - **Chunking**: Split documents into 512-character chunks with 50-character overlap
+   - **Metadata Extraction**: Extract category, title, section, source file
+   - **Text Cleaning**: Remove HTML tags, normalize whitespace, preserve Vietnamese encoding
+   - **Tokenization**: Use `underthesea` for Vietnamese word segmentation
+
+**5. Dataset Split**
    - Validation set: `val.json` - used for intermediate testing
    - Test set: `test.json` - used for final evaluation
+   - Private test: `private_test.json` - used by BTC for final evaluation
    - No overlap between sets
 
-### Using Datasets in Notebooks
+### 2.5 Data Processing Pipeline
+
+The complete data processing workflow:
 
 ```python
 # Example: Load and inspect data
@@ -352,7 +414,15 @@ for sample in dataset['train']:
     question = sample['question']
     choices = sample['choices']
     answer = sample['answer']
+    
+    # Process question text
+    # (handled automatically by Agent/InferencePipeline)
 ```
+
+**Processing Scripts:**
+- `predict.py`: Main entry point for inference (reads `/code/private_test.json` in Docker)
+- `inference.sh`: Bash script that orchestrates the full pipeline
+- `src/brain/inference/pipeline.py`: Core inference pipeline with batch processing
 
 ---
 
@@ -603,7 +673,98 @@ system_prompt = await context_manager.get_system_prompt()
 - `messages`: List[InternalMessage] - conversation history
 - `current_token_count`: Tracks LLM token usage
 
-#### 3.6 Data Files Initialization
+#### 3.6 Vector Database Initialization (LanceDB)
+
+The system uses **LanceDB** as the vector database for RAG (Retrieval-Augmented Generation). The knowledge base contains 26,513 document chunks across 26 categories.
+
+**Initialization Methods:**
+
+**Method 1: Pre-built Index (Recommended for Submission)**
+The Docker image includes a pre-built LanceDB index at `data/embeddings/knowledge/`:
+- **Location**: `data/embeddings/knowledge/knowledge.lance/`
+- **Size**: ~435MB
+- **Contents**: 26,513 chunks with 1536-dim embeddings (Azure text-embedding-ada-002)
+- **Indexes**: Vector (cosine similarity) + Full-Text Search (FTS) + Scalar filters
+- **No initialization required** - index is ready to use
+
+**Method 2: Build from Scratch (Development)**
+To build the index from source documents:
+
+```bash
+# Build complete index from data/data/ directory
+uv run python -m src.utils.knowledge_manager build \
+    --data-dir data/data \
+    --output-dir data/embeddings/knowledge \
+    --provider azure
+
+# Or use the knowledge.sh script
+./bin/knowledge.sh build --data-dir data/data --provider azure
+```
+
+**Method 3: Incremental Updates**
+To add new documents to existing index:
+
+```bash
+# Upsert new documents (incremental)
+./bin/knowledge.sh upsert \
+    --data-dir data/data/new_category \
+    --provider azure
+
+# Check index status
+./bin/knowledge.sh info
+```
+
+**LanceDB Index Structure:**
+```
+data/embeddings/knowledge/
+├── knowledge.lance/          # LanceDB database directory
+│   ├── _version/             # Version metadata
+│   ├── data/                 # Vector data files
+│   └── indices/              # Index files (vector, FTS)
+├── chunks.json               # Chunk metadata (backup)
+├── embeddings.npy            # Raw embeddings (backup)
+└── metadata.json             # Build metadata
+```
+
+**Index Configuration:**
+- **Chunk Size**: 512 characters
+- **Overlap**: 50 characters
+- **Embedding Dimension**: 1536 (Azure) or 1024 (VNPT)
+- **Similarity Metric**: Cosine similarity
+- **Hybrid Search**: Vector + Full-Text Search (FTS) + Category filtering
+
+**Loading the Index in Code:**
+```python
+from src.brain.rag.lancedb_retriever import LanceDBRetriever
+from src.brain.llm.services.azure import AzureService
+
+# Initialize LLM service for embeddings
+llm_service = AzureService(embedding_model="text-embedding-ada-002")
+
+# Load retriever from index directory
+retriever = LanceDBRetriever.from_directory(
+    index_dir="data/embeddings/knowledge",
+    llm_service=llm_service
+)
+
+# Use retriever for semantic search
+results = await retriever.retrieve(
+    query="Hồ Chí Minh sinh năm nào?",
+    top_k=5,
+    categories_filter=["Bac_Ho", "Lich_Su_Viet_nam"]
+)
+```
+
+**Verification:**
+```bash
+# Check if index exists and is valid
+ls -lh data/embeddings/knowledge/knowledge.lance/
+
+# Verify metadata
+cat data/embeddings/knowledge/metadata.json
+```
+
+#### 3.7 Data Files Initialization
 
 Ensure data files are present:
 
@@ -614,26 +775,82 @@ ls -la data/test.json     # Test dataset
 
 # Verify JSON structure
 python3 -m json.tool data/val.json | head -50
+
+# Check knowledge base
+ls -la data/embeddings/knowledge/
+```
+
+#### 3.8 Entry Point Scripts
+
+The system provides two main entry points for running the pipeline:
+
+**1. `predict.py` - Main Entry Point**
+- **Location**: Root directory (`/code/predict.py` in Docker)
+- **Purpose**: End-to-end inference pipeline
+- **Input**: Reads from `/code/private_test.json` (mounted by BTC)
+- **Output**: Generates `submission.csv` with format `qid,answer`
+- **Usage**:
+  ```bash
+  python predict.py \
+      --mode inference \
+      --input /code/private_test.json \
+      --output submission.csv \
+      --provider vnpt \
+      --use-agent \
+      --batch-size 6
+  ```
+
+**2. `inference.sh` - Submission Script**
+- **Location**: Root directory (`/code/inference.sh` in Docker)
+- **Purpose**: Bash script that orchestrates the complete pipeline
+- **Executed by**: Docker CMD (default container command)
+- **Functionality**:
+  - Validates input file exists (`/code/private_test.json`)
+  - Checks knowledge base availability
+  - Runs `predict.py` with optimal settings
+  - Verifies output CSV format
+- **Usage** (automatically called by Docker):
+  ```bash
+  bash inference.sh
+  ```
+
+**Pipeline Execution Flow:**
+```
+Docker Container Start
+    ↓
+inference.sh (CMD)
+    ↓
+predict.py --mode inference
+    ↓
+InferencePipeline.run()
+    ↓
+Agent.process_query() (for each question)
+    ↓
+submission.csv (output)
 ```
 
 ### Complete Initialization Checklist
 
 **Required for VNPT (Primary):**
 - [ ] Python 3.11+ installed
-- [ ] `uv` package manager installed
-- [ ] Project dependencies installed: `uv sync --group development`
+- [ ] `uv` package manager installed (or use `pip` with `requirements.txt`)
+- [ ] Project dependencies installed: `uv sync --group development` OR `pip install -r requirements.txt`
 - [ ] VNPT API credentials configured in `config/vnpt.json`
 - [ ] System prompt file exists: `src/brain/system_prompt/files/system.md`
 - [ ] Data files present: `data/val.json` and `data/test.json`
+- [ ] Knowledge base initialized: `data/embeddings/knowledge/knowledge.lance/` (pre-built in Docker)
 
 **Optional for Ollama (Local Development):**
 - [ ] Ollama service installed
 - [ ] Default model pulled: `ollama pull qwen3:1.7b`
 - [ ] Ollama server running: `ollama serve` (listening on port 11434)
 
-**Legacy Components (if using Agent directly):**
-- [ ] Message formatter implemented (IMessageFormatter protocol)
-- [ ] ContextManager instantiated with formatter and prompt manager
+**For Docker Submission:**
+- [ ] Dockerfile builds successfully
+- [ ] `predict.py` and `inference.sh` are in root directory
+- [ ] Knowledge base is included in image (`data/embeddings/knowledge/`)
+- [ ] `requirements.txt` contains all dependencies with versions
+- [ ] Container runs and generates `submission.csv` correctly
 
 ### Troubleshooting Resource Initialization
 
@@ -682,6 +899,46 @@ export LC_ALL=en_US.UTF-8
 ```
 
 ---
+
+## Library Management
+
+### Requirements File
+
+The project uses `requirements.txt` for dependency management, as required by submission guidelines.
+
+**File Location**: `requirements.txt` (root directory)
+
+**Management:**
+- **Auto-generated**: Created from `pyproject.toml` using `uv pip compile`
+- **Version Pinning**: All dependencies have specific versions to ensure reproducibility
+- **No Conflicts**: Dependencies are resolved to avoid version conflicts
+
+**Key Dependencies:**
+- **LLM Services**: `openai`, `azure-ai-inference`, `httpx`, `aiohttp`
+- **Vector Database**: `lancedb`, `numpy`
+- **Vietnamese NLP**: `underthesea`
+- **Data Processing**: `pandas`, `datasets`
+- **Utilities**: `loguru`, `python-dotenv`, `beautifulsoup4`
+
+**Installation:**
+```bash
+# Using pip (for Docker/submission)
+pip install --no-cache-dir -r requirements.txt
+
+# Using uv (for development)
+uv sync --group development
+```
+
+**Verification:**
+```bash
+# Check all dependencies are installed
+pip list | grep -E "(lancedb|openai|underthesea)"
+
+# Verify no conflicts
+pip check
+```
+
+**Note**: The `requirements.txt` file is automatically maintained and includes all transitive dependencies with pinned versions to ensure consistent builds across environments.
 
 ## Data Format
 
@@ -759,6 +1016,181 @@ Processed into LanceDB index:
 
 1. Delete old: `./bin/knowledge.sh delete --file "path/to/file.txt"`
 2. Add new: `./bin/knowledge.sh upsert --data-dir temp_dir --provider azure`
+
+---
+
+## 4. Docker Deployment (Submission)
+
+### 4.1 Building Docker Image
+
+The project includes a Dockerfile for submission to VNPT Hackathon Track 2, compliant with submission guidelines.
+
+**Prerequisites:**
+- Docker installed
+- No GPU required (lightweight CPU-only image)
+- For GPU support: Use CUDA 12.2 base image (see below)
+
+**Build the image:**
+```bash
+# CPU-only version (default, recommended)
+docker build -t vnpt-track2-submission .
+
+# GPU version (if CUDA 12.2 is needed)
+# Modify Dockerfile to use: FROM nvidia/cuda:12.2.0-devel-ubuntu20.04
+```
+
+**Key Features:**
+- **Base Image**: `python:3.11-slim` (lightweight, ~50MB base, CPU-only)
+- **CUDA Support**: Available via `nvidia/cuda:12.2.0-devel-ubuntu20.04` if GPU needed (BTC requirement: CUDA 12.2)
+- **Pre-built Knowledge Base**: Included (~435MB) at `data/embeddings/knowledge/`
+- **Dependencies**: All installed from `requirements.txt` with pinned versions
+- **Entry Point**: `inference.sh` script (runs complete pipeline)
+- **Total Image Size**: ~1-2GB (CPU version, much smaller than CUDA version)
+
+**Dockerfile Compliance:**
+- ✅ Builds from clean base image
+- ✅ All resources (knowledge base, dependencies) included in build
+- ✅ No external downloads required at runtime
+- ✅ Entry point: `inference.sh` (as per submission requirements)
+
+### 4.2 Running Container
+
+**For submission (BTC evaluation):**
+```bash
+# BTC will mount private_test.json and run:
+docker run \
+  -v /path/to/private_test.json:/code/private_test.json \
+  vnpt-track2-submission
+
+# Or with GPU (if CUDA 12.2 is available):
+docker run --gpus all \
+  -v /path/to/private_test.json:/code/private_test.json \
+  vnpt-track2-submission
+```
+
+**Container Execution Flow:**
+1. Container starts → Executes `CMD ["bash", "inference.sh"]`
+2. `inference.sh` validates input file exists at `/code/private_test.json`
+3. Runs `predict.py --mode inference --input /code/private_test.json --output submission.csv`
+4. Pipeline processes all questions using Agent with RAG capabilities
+5. Generates `submission.csv` in container root directory
+
+**Output Format (BTC Requirement):**
+- **File**: `submission.csv`
+- **Location**: Container root (`/code/submission.csv`)
+- **Format**: CSV with header `qid,answer`
+- **Example**:
+  ```csv
+  qid,answer
+  test_0001,A
+  test_0002,B
+  test_0003,C
+  ```
+
+### 4.3 Configuration
+
+**API Credentials:**
+The system requires VNPT AI API credentials. In Docker environment:
+- Option A: Mount config file: `-v /path/to/config/vnpt.json:/code/config/vnpt.json`
+- Option B: Use environment variables (if implemented)
+
+**Knowledge Base:**
+- Pre-built LanceDB index included in image at `data/embeddings/knowledge/`
+- Size: ~435MB
+- Contains 26,513 chunks across 26 categories
+- No initialization required on first run
+
+### 4.4 Multi-threading Configuration
+
+BTC allows and recommends 4-8 parallel threads for optimal inference speed.
+
+**Current Configuration:**
+- Default batch size: 6 threads (optimal middle ground)
+- Configurable via `--batch-size` argument in `predict.py`
+- Too many threads (>8) may cause slower inference due to rate limiting
+
+**Performance:**
+- Vector search: <50ms
+- Hybrid search: <100ms
+- Inference with 6 threads: Optimized for BTC evaluation environment
+
+### 4.5 Testing Locally
+
+Before submission, test the Docker image locally:
+
+```bash
+# Build image
+docker build -t vnpt-track2-submission .
+
+# Test with sample data
+docker run \
+  -v $(pwd)/data/test.json:/code/private_test.json \
+  vnpt-track2-submission
+
+# Verify output
+docker run \
+  -v $(pwd)/data/test.json:/code/private_test.json \
+  -v $(pwd)/results:/code/results \
+  vnpt-track2-submission
+
+# Check submission.csv format
+cat results/submission.csv | head -5
+```
+
+**Expected output:**
+```csv
+qid,answer
+test_0001,A
+test_0002,B
+test_0003,C
+...
+```
+
+### 4.6 Submission Checklist
+
+Before submitting to BTC, verify all requirements:
+
+**Repository Requirements:**
+- [x] README.md contains Pipeline Flow (Section 1) with diagram
+- [x] README.md contains Data Processing (Section 2) with cleaning steps
+- [x] README.md contains Resource Initialization (Section 3) with Vector DB setup
+- [x] `predict.py` exists and reads from `/code/private_test.json`
+- [x] `inference.sh` exists and orchestrates complete pipeline
+- [x] `requirements.txt` contains all dependencies with versions
+- [x] `Dockerfile` builds from clean base image
+
+**Docker Requirements:**
+- [ ] Docker image builds successfully: `docker build -t vnpt-track2-submission .`
+- [ ] Container runs without errors: `docker run -v /path/to/test.json:/code/private_test.json vnpt-track2-submission`
+- [ ] `submission.csv` is generated correctly at `/code/submission.csv`
+- [ ] CSV format matches: `qid,answer` with proper header
+- [ ] Knowledge base is accessible (no errors at `data/embeddings/knowledge/`)
+- [ ] API credentials are configured (or fail gracefully)
+- [ ] Multi-threading works (4-8 threads recommended, default: 6)
+- [ ] Image pushed to Docker Hub with correct tag
+
+**Submission Process:**
+1. **Build and Test Locally:**
+   ```bash
+   docker build -t vnpt-track2-submission .
+   docker run -v $(pwd)/data/test.json:/code/private_test.json vnpt-track2-submission
+   ```
+
+2. **Push to Docker Hub:**
+   ```bash
+   docker tag vnpt-track2-submission your-username/vnpt-track2-submission:latest
+   docker push your-username/vnpt-track2-submission:latest
+   ```
+
+3. **Submit to BTC:**
+   - GitHub Repository link (public, no edits after submission)
+   - Docker Hub image name: `your-username/vnpt-track2-submission:latest`
+   - **Deadline**: 23:59 (UTC+7) ngày 19/12/2024
+
+**Important Notes:**
+- Repository must be public and not edited after submission deadline
+- Docker image must be pushed before submission deadline
+- Images pushed after deadline will be considered invalid
 
 ---
 

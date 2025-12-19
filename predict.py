@@ -55,6 +55,12 @@ async def main():
         default=False,
         help="Use Agent with task routing (default: False, uses simple prompting)"
     )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=None,
+        help="Number of parallel threads for inference (BTC recommends 4-8, default: auto-detect based on provider)"
+    )
     
     args = parser.parse_args()
     
@@ -86,7 +92,8 @@ async def main():
             provider=args.provider,
             model=args.model,
             n=args.n,
-            qids=qids_list
+            qids=qids_list,
+            batch_size=args.batch_size
         )
     
     elif args.mode == "inference":
@@ -102,7 +109,8 @@ async def main():
             provider=args.provider,
             model=args.model,
             n=args.n,
-            qids=qids_list
+            qids=qids_list,
+            batch_size=args.batch_size
         )
 
 

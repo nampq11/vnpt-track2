@@ -156,6 +156,7 @@ async def run_pipeline(
     model: Optional[str] = None,
     n: Optional[int] = None,
     qids: Optional[List[str]] = None,
+    batch_size: Optional[int] = None,
 ) -> Optional[EvaluationMetrics]:
     """
     Run complete inference pipeline
@@ -210,9 +211,20 @@ async def run_pipeline(
     
     # Run inference
     print("Starting inference...")
-    # Determine batch size: 5 for API providers, 1 for local Ollama (unless specified otherwise)
-    batch_size = 5 if provider in ["vnpt", "azure"] else 1
+    # Determine batch size: use provided value, or auto-detect based on provider
+    if batch_size is None:
+        # Default: 5 for API providers, 1 for local Ollama
+        # BTC recommends 4-8 threads for optimal speed
+        batch_size = 5 if provider in ["vnpt", "azure"] else 1
+    else:
+        # Validate batch size (BTC recommends 4-8)
+        if batch_size < 1:
+            logger.warning(f"Invalid batch_size {batch_size}, using default")
+            batch_size = 5 if provider in ["vnpt", "azure"] else 1
+        elif batch_size > 8:
+            logger.warning(f"Batch size {batch_size} exceeds BTC recommendation (4-8), may cause slower inference")
     
+    print(f"Using batch size: {batch_size} threads")
     predictions = await pipeline.run_inference(questions, batch_size=batch_size)
     
     # Save predictions
