@@ -57,7 +57,7 @@ docker run --gpus all \
 
 **Kết quả:**
 - Input phải mount tại `/code/private_test.json`
-- File `submission.csv` sẽ được tạo trong `/code/` (root của container)
+- File `submission.csv`, `submission_time.csv` sẽ được tạo trong `/code/` (root của container)
 - Để lấy file ra ngoài, mount thêm volume: `-v $(pwd)/results:/code/results` và chỉnh output path
 
 ### 4. Tự Build Image (Tuỳ chọn)
