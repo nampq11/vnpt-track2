@@ -18,6 +18,7 @@ QIDS=""
 USE_AGENT="--use-agent"
 MODEL=""
 OUTPUT_FORMAT="csv"
+VERBOSE="True"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -63,6 +64,10 @@ while [[ $# -gt 0 ]]; do
             OUTPUT_FORMAT="csv"
             shift
             ;;
+        --verbose)
+            VERBOSE="$2"
+            shift 2
+            ;;
         -h|--help)
             echo "VNPT Track 2 - Evaluation Script"
             echo ""
@@ -83,6 +88,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --csv                Output as CSV (default)"
             echo "  --json               Output as JSON"
             echo "  -h, --help           Show this help message"
+            echo "  -v, --verbose        Enable verbose mode (default: True)"
             echo ""
             echo "Examples:"
             echo "  $0                                      # 5 questions, azure, agent"
@@ -128,7 +134,7 @@ fi
 OUTPUT_FILE="${OUTPUT_DIR}/${DATASET}_${PROVIDER}${AGENT_SUFFIX}${N_SUFFIX}.${OUTPUT_FORMAT}"
 
 # Construct command
-CMD="uv run python predict.py --mode eval --input \"$INPUT_FILE\" --output \"$OUTPUT_FILE\" --provider \"$PROVIDER\""
+CMD="uv run python predict.py --mode eval --input \"$INPUT_FILE\" --output \"$OUTPUT_FILE\" --provider \"$PROVIDER\" --verbose $VERBOSE"
 
 if [ -n "$USE_AGENT" ]; then
     CMD="$CMD $USE_AGENT"

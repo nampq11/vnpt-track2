@@ -7,14 +7,18 @@ class BaseTask(ABC):
     def __init__(
         self,
         llm_service: LLMService,
+        verbose: bool = False
     ) -> None:
         self.llm_service = llm_service
-        logger.info("Initialized Base Task")
+        self.verbose = verbose
+        if self.verbose:
+            logger.info("Initialized Base Task")
 
     @abstractmethod
     async def invoke(
         self,
         query: str,
         options: Dict[str, str],
+        verbose: bool = False
     ) -> str:
         pass

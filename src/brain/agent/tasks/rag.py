@@ -73,9 +73,9 @@ class RAGTask(BaseTask):
             return f"Key concepts: {entities_str}\n"
         return ""
 
-    def _parse_json_answer(self, text: str, options: Dict[str, str]) -> Dict[str, str]:
+    def _parse_json_answer(self, text: str, options: Dict[str, str], verbose: bool = False) -> Dict[str, str]:
         """Extract JSON answer from LLM response with CoT reasoning."""
-        return extract_answer_from_response(text, options)
+        return extract_answer_from_response(text, options, verbose=verbose)
 
     async def invoke(
         self,
@@ -84,9 +84,12 @@ class RAGTask(BaseTask):
         options: Dict[str, str],
         temporal_constraint: Optional[int] = None,
         key_entities: Optional[List[str]] = None,
+        query_id: str = None,
+        verbose: bool = False,
     ) -> Dict[str, str]:
         try:
-            logger.info(f"RAG Task invoked with domain={domain}, query={query[:50]}...")
+            if verbose:
+                logger.info(f"[{query_id}] RAG Task invoked with domain={domain}, query={query[:50]}...")
             choices_str = self._format_choices(options)
             temporal_hint = self._build_temporal_hint(temporal_constraint)
             entities_hint = self._build_entities_hint(key_entities)
@@ -105,9 +108,11 @@ class RAGTask(BaseTask):
                     category_filter = self.domain_mapper.get_categories_for_domain(domain)
                     
                     if category_filter:
-                        logger.info(f"Using category filter: {category_filter}")
+                        if verbose:
+                            logger.info(f"[{query_id}] Using category filter: {category_filter}")
                     else:
-                        logger.info("No category filter (searching all categories)")
+                        if verbose:
+                            logger.info(f"[{query_id}] No category filter (searching all categories)")
                     
                     # Use domain-specific top_k
                     effective_top_k = retrieval_config.top_k
@@ -116,11 +121,13 @@ class RAGTask(BaseTask):
                         query=query,
                         top_k=effective_top_k,
                         categories_filter=category_filter,
+                        verbose=verbose,
                     )
                     
                     if results:
                         context = format_retrieval_context(results)
-                        logger.info(f"Retrieved {len(results)} chunks for query (domain={domain})")
+                        if verbose:
+                            logger.info(f"[{query_id}] Retrieved {len(results)} chunks for query (domain={domain})")
                 except Exception as e:
                     logger.warning(f"Retrieval failed: {e}")
             
@@ -143,14 +150,16 @@ class RAGTask(BaseTask):
                     choices=choices_str,
                 )
             
-            logger.info(f"RAG Task User Prompt: {user_prompt}")
+            if verbose:
+                logger.info(f"[{query_id}] RAG Task User Prompt: {user_prompt}")
             response_text = await self.llm_service.generate(
                 user_input=user_prompt,
                 system_message=system_prompt,
             )
-            logger.debug(f"RAG Task LLM response: {response_text}")
+            if verbose:
+                logger.debug(f"[{query_id}] RAG Task LLM response: {response_text}")
             
-            return self._parse_json_answer(response_text, options)
+            return self._parse_json_answer(response_text, options, verbose)
             
         except Exception as e:
             logger.error(f"Error invoking RAG Task: {e}")

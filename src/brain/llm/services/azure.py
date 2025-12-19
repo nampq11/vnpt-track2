@@ -4,6 +4,7 @@ from openai import AzureOpenAI
 from dotenv import load_dotenv
 import aiohttp
 import os
+from loguru import logger
 
 load_dotenv()
 
@@ -25,6 +26,7 @@ class AzureService(LLMService):
         model: str = "gpt-4.1",
         embedding_model: str = "text-embedding-ada-002",
         max_iterations: int = 5,
+        verbose: bool = False
     ) -> None:
         """
         Initialize Azure OpenAI Service
@@ -43,6 +45,7 @@ class AzureService(LLMService):
         self.model = model
         self.embedding_model = embedding_model
         self.max_iterations = max_iterations
+        self.verbose = verbose
         self.config = AzureServiceConfig(model=model)
         
         self.client = AzureOpenAI(
@@ -56,6 +59,7 @@ class AzureService(LLMService):
         user_input: str,
         system_message: Optional[str] = None,
         stream: Optional[bool] = False,
+        verbose: bool = False
     ) -> str:
         """
         Generate response from Azure OpenAI API.
@@ -76,6 +80,11 @@ class AzureService(LLMService):
             if system_message:
                 messages.append({"role": "system", "content": system_message})
             messages.append({"role": "user", "content": user_input})
+
+            if verbose or self.verbose:
+                logger.info(
+                    f"Sending request to Azure with model={self.model}, messages={messages}"
+                )
 
             response = self.client.chat.completions.create(
                 model=self.model,

@@ -11,8 +11,10 @@ class ReadingTask(BaseTask):
     def __init__(
         self,
         llm_service: LLMService,
+        verbose: bool = False
     ) -> None:
         # Use provided LLM service or fallback to VNPT large model
+        self.verbose = verbose
         if isinstance(llm_service, VNPTService):
             # If VNPT, use large model for better comprehension
             self.llm_service = VNPTService(
@@ -66,6 +68,8 @@ class ReadingTask(BaseTask):
         self,
         query: str,
         options: Dict[str, str],
+        query_id: str = None,
+        verbose: bool = False,
     ) -> Dict[str, str]:
         try:
             context, question = self._extract_question_from_context(query)
@@ -78,16 +82,14 @@ class ReadingTask(BaseTask):
                 question=question,
                 choices=choices_str,
             )
-
-            logger.info(
-                f"Reading Task Prompt: {user_prompt}"
-            )
             
             response_text = await self.llm_service.generate(
                 user_input=user_prompt,
                 system_message=system_prompt,
+                verbose=verbose or self.verbose,
             )
-            logger.debug(f"Reading Task LLM response: {response_text}")
+            if verbose:
+                logger.debug(f"[{query_id}] Reading Task LLM response: {response_text}")
             
             return self._parse_json_answer(response_text, options)
             

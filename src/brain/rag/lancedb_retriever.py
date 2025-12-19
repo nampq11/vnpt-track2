@@ -47,6 +47,7 @@ class LanceDBRetriever:
         category_filter: Optional[str] = None,
         categories_filter: Optional[List[str]] = None,
         min_score: float = 0.0,
+        verbose: bool = False,
     ) -> List[RetrievalResult]:
         """
         Retrieve relevant chunks using LanceDB native hybrid search.
@@ -66,10 +67,11 @@ class LanceDBRetriever:
         Returns:
             List of RetrievalResult sorted by relevance
         """
-        logger.info(
-            f"Retriever retrieve with query: {query[:50]}..., "
-            f"category_filter: {category_filter}, categories_filter: {categories_filter}"
-        )
+        if verbose:
+            logger.info(
+                f"Retriever retrieve with query: {query[:50]}..., "
+                f"category_filter: {category_filter}, categories_filter: {categories_filter}"
+            )
         
         # Clean query before processing
         cleaned_query = clean_query(query)
@@ -80,7 +82,8 @@ class LanceDBRetriever:
         # Get query embedding using cleaned query
         query_embedding = await self._get_query_embedding(cleaned_query)
         if query_embedding is None:
-            logger.warning("Failed to get embedding, skipping retrieval")
+            if verbose:
+                logger.warning("Failed to get embedding, skipping retrieval")
             return []
         
         # Determine categories
@@ -97,6 +100,7 @@ class LanceDBRetriever:
                 query_embedding=query_embedding,
                 top_k=top_k,
                 categories=categories,
+                verbose=verbose,
             )
         except Exception as e:
             logger.error(f"Hybrid search failed: {e}, falling back to vector-only search")
@@ -162,8 +166,8 @@ class LanceDBRetriever:
                 },
                 retrieval_source="hybrid",
             ))
-        
-        logger.info(f"Retrieved {len(retrieval_results)} results")
+        if verbose:       
+            logger.info(f"Retrieved {len(retrieval_results)} results")
         return retrieval_results
     
     async def _get_query_embedding(self, query: str) -> Optional[np.ndarray]:
@@ -187,6 +191,7 @@ class LanceDBRetriever:
         cls,
         index_dir: str,
         llm_service: LLMService,
+        verbose: bool = False
     ) -> "LanceDBRetriever":
         """
         Load retriever from index directory.
@@ -200,8 +205,9 @@ class LanceDBRetriever:
         """
         lancedb_index = LanceDBIndex.load(index_dir, table_name="knowledge")
         
-        logger.info(f"Loaded LanceDB retriever from {index_dir}")
-        logger.info(f"  - Vectors: {lancedb_index.ntotal}")
+        if verbose:
+            logger.info(f"Loaded LanceDB retriever from {index_dir}")
+            logger.info(f"  - Vectors: {lancedb_index.ntotal}")
         
         return cls(
             lancedb_index=lancedb_index,

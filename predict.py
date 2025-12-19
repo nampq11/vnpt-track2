@@ -61,6 +61,12 @@ async def main():
         default=None,
         help="Number of parallel threads for inference (BTC recommends 4-8, default: auto-detect based on provider)"
     )
+    parser.add_argument(
+        "--verbose",
+        type=bool,
+        default=False,
+        help="Verbose mode (default: False)"
+    )
     
     args = parser.parse_args()
     
@@ -83,7 +89,7 @@ async def main():
         # Full evaluation with metrics
         mode_str = "Agent" if args.use_agent else "Simple"
         qids_list = args.qids.split(',') if args.qids else None
-        print(f"Running full evaluation ({mode_str} mode) with metrics using {args.provider}...")
+        print(f"Running full evaluation ({mode_str} mode) with metrics using {args}")
         await run_pipeline(
             test_file=args.input,
             output_file=args.output,
@@ -93,7 +99,8 @@ async def main():
             model=args.model,
             n=args.n,
             qids=qids_list,
-            batch_size=args.batch_size
+            batch_size=args.batch_size,
+            verbose=args.verbose
         )
     
     elif args.mode == "inference":
@@ -110,7 +117,8 @@ async def main():
             model=args.model,
             n=args.n,
             qids=qids_list,
-            batch_size=args.batch_size
+            batch_size=args.batch_size,
+            verbose=args.verbose
         )
 
 

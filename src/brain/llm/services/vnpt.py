@@ -1,6 +1,7 @@
 from src.brain.llm.services.type import LLMService, LLMServiceConfig
 import json
 import asyncio
+from loguru import logger
 from pathlib import Path
 from typing import Literal, Dict, List, Optional, Any
 from dotenv import load_dotenv
@@ -74,10 +75,12 @@ class VNPTService(LLMService):
         model: str = "vnptai-hackathon-small",
         model_type: Literal["embedding", "small", "large"] = "small",
         config_path: str = "config/api-keys.json",
+        verbose: bool = False
     ) -> None:
         self.base_url = base_url
         self.model = model
         self.model_type = model_type
+        self.verbose = verbose
         
         # Load config from JSON file
         config_data = load_config_from_file(config_path, model_type)
@@ -111,13 +114,14 @@ class VNPTService(LLMService):
         user_input: str,
         system_message: Optional[str] = None,
         stream: Optional[bool] = False,
+        verbose: bool = False
     ) -> str:
         """Generate response from VNPT AI API with retry logic (3 retries, exponential backoff)"""
         if stream:
             raise NotImplementedError("Streaming is not supported by VNPTService yet.")
         
         try:
-            return await self._generate_with_retry(user_input, system_message)
+            return await self._generate_with_retry(user_input, system_message, verbose)
         except Exception as e:
             raise RuntimeError(f"Error generating response from VNPT: {str(e)}")
     
@@ -125,7 +129,7 @@ class VNPTService(LLMService):
         max_retries=3,
         exceptions=(aiohttp.ClientError, asyncio.TimeoutError, ConnectionError)
     )
-    async def _generate_with_retry(self, user_input: str, system_message: Optional[str] = None) -> str:
+    async def _generate_with_retry(self, user_input: str, system_message: Optional[str] = None, verbose: bool = False) -> str:
         """Internal method with retry logic for generate()"""
         headers = self._get_headers()
         
@@ -133,6 +137,9 @@ class VNPTService(LLMService):
         if system_message:
             messages.append({'role': 'system', 'content': system_message})
         messages.append({'role': 'user', 'content': user_input})
+
+        if verbose or self.verbose:
+            logger.info(f"Sending request to VNPT with model={self.model}, messages={str(messages)}")
 
         json_data = {
             'model': self.model.replace('-', '_'),

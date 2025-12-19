@@ -41,9 +41,12 @@ class MathTask(BaseTask):
         query: str,
         domain: DomainMathTask,
         options: Dict[str, str],
+        query_id: str = None,
+        verbose: bool = False,
     ) -> Dict[str, str]:
         try:
-            logger.debug(f"Math Task invoked with query: {query[:50]}... and {len(options)} options and domain: {domain}")
+            if verbose:
+                logger.debug(f"[{query_id}] Math Task invoked with query: {query[:50]}... and {len(options)} options and domain: {domain}")
             choices_str = self._format_choices(options)
 
             if domain == DomainMathTask.CHEMISTRY:
@@ -56,14 +59,17 @@ class MathTask(BaseTask):
                     choices=choices_str,
                 )
             
-            logger.info(f"Math Task calling LLM with user prompt: {user_prompt}")
+            if verbose:
+                logger.info(f"[{query_id}] Math Task calling LLM with user prompt: {user_prompt}")
             response_text = await self.llm_service.generate(
                 user_input=user_prompt,
                 system_message=system_prompt,
             )
-            logger.debug(f"Math Task LLM response: {response_text}")
+            if verbose:
+                logger.debug(f"[{query_id}] Math Task LLM response: {response_text}")
             result = self._parse_json_answer(response_text, options)
-            logger.debug(f"Math Task parsed result: {result}")
+            if verbose:
+                logger.debug(f"[{query_id}] Math Task parsed result: {result}")
             return result
         except Exception as e:
             logger.error(f"Error invoking Math Task: {e}")

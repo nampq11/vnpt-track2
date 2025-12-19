@@ -14,10 +14,12 @@ load_dotenv()
 class GuardrailService:
     def __init__(
         self,
-        llm_service: LLMService
+        llm_service: LLMService,
+        verbose: bool = False
     ) -> None:
         self.llm_service = llm_service
         self.prompt_manager = EnhancedPromptManager.get_instance()
+        self.verbose = verbose
         
         # Get the safety index path from environment or use default
         safety_index_path = os.getenv('SAFETY_INDEX_PATH', 'data/embeddings/safety_index.npy')
@@ -50,8 +52,8 @@ class GuardrailService:
         
         with open(safety_queries_path, 'r', encoding='utf-8') as f:
             self.safety_queries = json.load(f)
-        
-        logger.info(f"Loaded {len(self.safety_queries)} safety queries from {safety_queries_path}")
+        if self.verbose:
+            logger.info(f"Loaded {len(self.safety_queries)} safety queries from {safety_queries_path}")
 
     async def invoke(
         self,
@@ -59,6 +61,8 @@ class GuardrailService:
         is_safe: Optional[bool] = None,
         embedding: Optional[List[float]] = None,
         options: Optional[Dict[str, str]] = None,
+        query_id: str = None,
+        verbose: bool = False,
     ) -> Tuple[bool, Dict[str, str]]:
         try:
             violation_reason = None
@@ -71,7 +75,8 @@ class GuardrailService:
                 
                 # Validate dimensions
                 if embedding_array.shape[0] != self.safety_index.shape[1]:
-                    logger.warning(f"Embedding dimension mismatch: {embedding_array.shape[0]} != {self.safety_index.shape[1]}")
+                    if verbose:
+                        logger.warning(f"[{query_id}] Embedding dimension mismatch: {embedding_array.shape[0]} != {self.safety_index.shape[1]}")
                     is_safe = True
                 else:
                     # Normalize embedding for proper cosine similarity
@@ -82,12 +87,14 @@ class GuardrailService:
                     scores = np.dot(self.safety_index, embedding_array)
                     max_score = float(np.max(scores))
                     violation_reason = f"Similarity {max_score:.2f}"
-                    logger.info(f"violation reason: {violation_reason}")
+                    if verbose:
+                        logger.info(f"[{query_id}] violation reason: {violation_reason}")
                     
                     if max_score > self.safety_threshold:
                         max_score_idx = int(np.argmax(scores))
                         matched_query = self.safety_queries[max_score_idx]
-                        logger.info(f"matched safety query: {matched_query}")
+                        if verbose:
+                            logger.info(f"[{query_id}] matched safety query: {matched_query}")
                         is_safe = False
                     else:
                         is_safe = True
@@ -110,8 +117,9 @@ class GuardrailService:
                         system_message=system_prompt
                     )
 
-                    result = self._parse_json_answer_robust(options, response_text)
-                    logger.info(f"Guardrail Service Result: {result}")
+                    result = self._parse_json_answer_robust(options, response_text, query_id, verbose)
+                    if verbose:
+                        logger.info(f"[{query_id}] Guardrail Service Result: {result}")
                     return is_safe, result
                 except Exception as e:
                     logger.error(f"Error invoking Guardrail Service: {e}")
@@ -126,10 +134,13 @@ class GuardrailService:
     def _parse_json_answer_robust(
         self,
         options: Optional[Dict[str, str]],
-        text: str
+        text: str,
+        query_id: str = None,
+        verbose: bool = False,
     ) -> Dict[str, str]:
         """Parse JSON answer from LLM response and return as dict"""
-        logger.info(f"Parsing safety selector answer with options: {options}")
+        if verbose:
+            logger.info(f"[{query_id}] Parsing safety selector answer with options: {options}")
         return extract_answer_from_response(
             text,
             options if options else {},

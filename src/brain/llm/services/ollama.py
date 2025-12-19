@@ -1,6 +1,7 @@
 from typing import Optional, List
 from src.brain.llm.services.type import LLMService, LLMServiceConfig
 from openai import OpenAI
+from loguru import logger
 import aiohttp
 import ollama
 from src.brain.llm.services.retry_utils import retry_sync
@@ -19,10 +20,12 @@ class OllamaService(LLMService):
         api_key: str = "ollama",
         model: str = "qwen3:1.7b",
         max_iterations: int = 5,
+        verbose: bool = False
     ) -> None:
         self.openai = OpenAI(base_url=base_url, api_key=api_key)
         self.model = model
         self.max_iterations = max_iterations
+        self.verbose = verbose
         self.config = OllamaServiceConfig(model=model)
     
     async def generate(
@@ -30,6 +33,7 @@ class OllamaService(LLMService):
         user_input: str,
         system_message: Optional[str] = None,
         stream: Optional[bool] = False,
+        verbose: bool = False
     ) -> str:
         """
         Generate response from Ollama via OpenAI API.
@@ -40,6 +44,10 @@ class OllamaService(LLMService):
             if system_message:
                 messages.append({"role": "system", "content": system_message})
             messages.append({"role": "user", "content": user_input})
+            if verbose or self.verbose:
+                logger.info(
+                    f"Sending request to Ollama with model={self.model}, messages={messages}"
+                )
 
             response = self.openai.chat.completions.create(
                 model=self.model,

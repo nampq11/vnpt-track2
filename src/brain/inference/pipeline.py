@@ -23,15 +23,16 @@ class InferencePipeline:
         llm_service: LLMService,
         use_agent: bool = True,
         system_prompt: Optional[str] = None,
+        verbose: bool = False
     ):
         self.llm_service = llm_service
         self.use_agent = use_agent
         self.system_prompt = system_prompt or self._get_default_system_prompt()
         self.processor = QuestionProcessor()
-        
+        self.verbose = verbose
         # Initialize Agent if enabled
         if self.use_agent:
-            self.agent = Agent(llm_service=llm_service)
+            self.agent = Agent(llm_service=llm_service, verbose=verbose)
     
     def _get_default_system_prompt(self) -> str:
         """Get default system prompt for QA (only used when use_agent=False)"""
@@ -44,6 +45,7 @@ Cuối cùng, cho biết rõ ràng đáp án bạn chọn (A, B, C hoặc D)."""
         self,
         questions: List[Question],
         batch_size: int = 1,
+        verbose: bool = False
     ) -> List[PredictionResult]:
         """
         Run inference on a batch of questions concurrently.
@@ -60,7 +62,7 @@ Cuối cùng, cho biết rõ ràng đáp án bạn chọn (A, B, C hoặc D)."""
         total = len(questions)
         completed = 0
         
-        print(f"Processing {total} questions with batch size {batch_size}...")
+        print(f"Processing {total} questions with batch size {batch_size}..., verbose: {self.verbose}")
         
         async def process_one(question: Question) -> PredictionResult:
             nonlocal completed
@@ -78,7 +80,8 @@ Cuối cùng, cho biết rõ ràng đáp án bạn chọn (A, B, C hoặc D)."""
                         result = await self.agent.process_query(
                             query=question.question,
                             options=options,
-                            query_id=question.qid
+                            query_id=question.qid,
+                            verbose=verbose
                         )
                         answer = result.get('answer', 'A')
                         
@@ -177,6 +180,7 @@ async def run_pipeline(
     n: Optional[int] = None,
     qids: Optional[List[str]] = None,
     batch_size: Optional[int] = None,
+    verbose: bool = False
 ) -> Optional[EvaluationMetrics]:
     """
     Run complete inference pipeline
@@ -204,7 +208,8 @@ async def run_pipeline(
     pipeline = InferencePipeline(
         llm_service=llm_service,
         use_agent=use_agent,
-        system_prompt=system_prompt
+        system_prompt=system_prompt,
+        verbose=verbose
     )
     
     # Load questions
@@ -245,7 +250,7 @@ async def run_pipeline(
             logger.warning(f"Batch size {batch_size} exceeds BTC recommendation (4-8), may cause slower inference")
     
     print(f"Using batch size: {batch_size} threads")
-    predictions = await pipeline.run_inference(questions, batch_size=batch_size)
+    predictions = await pipeline.run_inference(questions, batch_size=batch_size, verbose=verbose)
     
     # Save predictions
     pipeline.save_predictions(predictions, output_file)

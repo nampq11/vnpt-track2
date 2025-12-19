@@ -8,15 +8,18 @@ from src.brain.system_prompt import EnhancedPromptManager, PromptType
 class QueryClassificationService:
     def __init__(
         self,
-        llm_service: LLMService
+        llm_service: LLMService,
+        verbose: bool = False
     ) -> None:
         self.llm_service = llm_service
         self.prompt_manager = EnhancedPromptManager.get_instance()
-        logger.info("Initialized Query Classification Service")
+        if verbose:
+            logger.info("Initialized Query Classification Service")
 
     async def invoke(
         self,
-        query: str
+        query: str,
+        verbose: bool = False
     ) -> Dict[str, Any]:
         result = None
         try:
@@ -27,8 +30,9 @@ class QueryClassificationService:
                 user_input=user_prompt,
                 system_message=system_prompt
             )
-            result = self._parse_json_answer_robust(response_text)
-            logger.info(f"Query Classification Result: {result}")
+            result = self._parse_json_answer_robust(response_text, verbose=verbose)
+            if verbose:
+                logger.info(f"Query Classification Result: {result}")
             return result
         except Exception as e:
             logger.error(f"Error invoking Query Classification Service: {e}")
@@ -41,10 +45,12 @@ class QueryClassificationService:
 
     def _parse_json_answer_robust(
         self,
-        text: str
+        text: str,
+        verbose: bool = False
     ) -> Dict[str, Any]:
         """Parse JSON from LLM response with fallback to default classification"""
-        logger.info(f"Parsing JSON answer: {text[:100]}...")
+        if verbose:
+            logger.info(f"Parsing JSON answer: {text[:100]}...")
         return parse_json_from_llm_response(
             text,
             default={

@@ -16,8 +16,10 @@ class Agent:
     def __init__(
         self,
         llm_service: LLMService,
+        verbose: bool = False
     ) -> None:
         self.llm_service = llm_service
+        self.verbose = verbose
         self.query_classification = QueryClassificationService(llm_service=llm_service)
         self.guardrail = GuardrailService(llm_service=llm_service)
         
@@ -25,7 +27,8 @@ class Agent:
         self.math_task = MathTask(llm_service=llm_service)
         self.reading_task = ReadingTask(llm_service=llm_service)
         self.rag_task = RAGTask(llm_service=llm_service)
-        logger.info("Initialized Agent")
+        if verbose:
+            logger.info("Initialized Agent")
 
     async def process_query(
         self,
@@ -33,6 +36,7 @@ class Agent:
         options: Dict[str, str],
         query_id: str,
         timeout: float = 60.0,
+        verbose: bool = False,
     ) -> Dict[str, Any]:
         """
         Process query with timeout protection.
@@ -48,7 +52,7 @@ class Agent:
         """
         try:
             return await asyncio.wait_for(
-                self._process_query_internal(query, options, query_id),
+                self._process_query_internal(query, options, query_id, verbose),
                 timeout=timeout
             )
         except asyncio.TimeoutError:
@@ -65,12 +69,14 @@ class Agent:
         query: str,
         options: Dict[str, str],
         query_id: str,
+        verbose: bool,
     ) -> Dict[str, Any]:
         """Internal query processing logic with 3-layer architecture"""
         start_time = time.time()
 
         try:
-            logger.info(f"[{query_id}] Processing query: {query[:50]}...")
+            if verbose:
+                logger.info(f"[{query_id}] Processing query: {query[:50]}...")
             # --- LAYER 1: FAST SAFE CHECK ---
             try:
                 async with aiohttp.ClientSession() as session:
@@ -85,7 +91,8 @@ class Agent:
                             embedding=query_embedding,
                             options=options,  # Pass options for answer generation
                         )
-                        logger.info(f"Guardrail Result: {guardrail_result}")
+                        if verbose: 
+                            logger.info(f"[{query_id}] Guardrail Result: {guardrail_result}")
                     else:
                         guardrail_result = (True, {})
             except Exception as e:
@@ -97,20 +104,23 @@ class Agent:
             
             # If guardrail blocked the query, return the safe answer immediately
             if not is_safe:
-                logger.warning(f"[{query_id}] Query blocked by guardrail embedding check")
+                if verbose:
+                   logger.warning(f"[{query_id}] Query blocked by guardrail embedding check")
                 # Validate answer is not 'None'
                 if guardrail_answer.get('answer') not in [None, 'None', '']:
                     return guardrail_answer
                 else:
                     # Fallback to first option if guardrail couldn't determine answer
-                    logger.warning(f"[{query_id}] Guardrail returned invalid answer, using fallback")
+                    if verbose:
+                        logger.warning(f"[{query_id}] Guardrail returned invalid answer, using fallback")
                     return {"answer": sorted(options.keys())[0]}
             
             # --- LAYER 2: QUERY CLASSIFICATION ---
             classification = await self.query_classification.invoke(
                 query=query,
             )
-            logger.info(f"[{query_id}] Query Classification Result: {classification}")
+            if verbose:
+                logger.info(f"[{query_id}] Query Classification Result: {classification}")
 
             # --- LAYER 3: EXECUTION ---
             if classification['category'] == ScenarioTask.SAFETY:
@@ -120,6 +130,7 @@ class Agent:
                     user_input=query,
                     is_safe=False,
                     options=options,
+                    verbose=verbose,
                 )
                 result = safe_answer if isinstance(safe_answer, dict) else {"answer": sorted(options.keys())[0]}
             elif classification['category'] == ScenarioTask.MATH:
@@ -127,11 +138,13 @@ class Agent:
                     query=query,
                     domain=classification['domain'],
                     options=options,
+                    verbose=verbose,
                 )
             elif classification['category'] == ScenarioTask.READING:
                 result = await self.reading_task.invoke(
                     query=query,
                     options=options,
+                    verbose=verbose,
                 )
             elif classification['category'] == ScenarioTask.RAG:
                 result = await self.rag_task.invoke(
@@ -140,6 +153,7 @@ class Agent:
                     options=options,
                     temporal_constraint=classification['temporal_constraint'],
                     key_entities=classification['key_entities'],
+                    verbose=verbose,
                 )
             else:
                 result = {

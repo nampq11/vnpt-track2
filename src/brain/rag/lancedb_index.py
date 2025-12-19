@@ -193,6 +193,7 @@ class LanceDBIndex:
         query_embedding: np.ndarray,
         top_k: int = 10,
         categories: Optional[List[str]] = None,
+        verbose: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Native hybrid search combining vector + FTS with RRF reranking.

@@ -16,6 +16,7 @@ OUTPUT_FORMAT="${3:-json}"  # json or csv
 PROVIDER="${4:-vnpt}"       # ollama, vnpt, or azure
 MODEL="${5:-}"              # optional model override
 USE_AGENT="${6:-}"          # optional: --use-agent flag
+VERBOSE="${7:-False}"     # optional: verbose mode
 
 INPUT_FILE="data/${DATASET}.json"
 OUTPUT_DIR="results"
@@ -55,7 +56,7 @@ case "$MODE" in
         fi
         echo "📊 Running full evaluation on $DATASET.json (output: $OUTPUT_FORMAT) with $PROVIDER ($MODE_DISPLAY mode)..."
         
-        CMD="uv run python predict.py --mode eval --input \"$INPUT_FILE\" --output \"$OUTPUT_FILE\" --provider \"$PROVIDER\""
+        CMD="uv run python predict.py --mode eval --input \"$INPUT_FILE\" --output \"$OUTPUT_FILE\" --provider \"$PROVIDER\" --verbose $VERBOSE"
         if [ -n "$MODEL" ]; then
             CMD="$CMD --model \"$MODEL\""
         fi

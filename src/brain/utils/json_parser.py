@@ -8,7 +8,9 @@ from loguru import logger
 def parse_json_from_llm_response(
     text: str,
     default: Optional[Dict[str, Any]] = None,
-    context: str = ""
+    context: str = "",
+    query_id: str = None,
+    verbose: bool = False,
 ) -> Dict[str, Any]:
     """
     Extract and parse JSON from LLM response text.
@@ -27,10 +29,12 @@ def parse_json_from_llm_response(
         
         if match:
             data = json.loads(match.group())
-            logger.debug(f"[{context}] Successfully parsed JSON from response")
+            if verbose:
+                logger.debug(f"[{context}] Successfully parsed JSON from response")
             return data
         else:
-            logger.warning(f"[{context}] No JSON found in response: {text[:100]}...")
+            if verbose:
+                logger.warning(f"[{context}] No JSON found in response: {text[:100]}...")
             return default if default is not None else {}
             
     except json.JSONDecodeError as e:
@@ -44,7 +48,9 @@ def parse_json_from_llm_response(
 def extract_answer_from_response(
     text: str,
     options: Dict[str, str],
-    default_answer: str = "A"
+    default_answer: str = "A",
+    query_id: str = None,
+    verbose: bool = False,
 ) -> Dict[str, str]:
     """
     Extract answer from LLM response (for QA tasks).
@@ -74,11 +80,13 @@ def extract_answer_from_response(
     text_upper = text.upper()
     for letter in sorted(options.keys()):
         if f'"{letter}"' in text_upper or f"'{letter}'" in text_upper:
-            logger.info(f"Found quoted answer: {letter}")
+            if verbose:
+                logger.info(f"[{query_id}] Found quoted answer: {letter}")
             return {"answer": letter}
     
     # Strategy 3: Fallback to first option or default
     fallback = sorted(options.keys())[0] if options else default_answer
-    logger.warning(f"Using fallback answer: {fallback}")
+    if verbose:
+        logger.warning(f"[{query_id}] Using fallback answer: {fallback}")
     return {"answer": fallback}
 
