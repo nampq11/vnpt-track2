@@ -1,4 +1,4 @@
-from brain.llm.services.vnpt import VNPTService
+from src.brain.llm.services.vnpt import VNPTService
 from src.brain.llm.services.type import LLMService
 from loguru import logger
 from typing import Any, Dict
