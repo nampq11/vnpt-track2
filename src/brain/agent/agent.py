@@ -134,9 +134,15 @@ class Agent:
                 )
                 result = safe_answer if isinstance(safe_answer, dict) else {"answer": sorted(options.keys())[0]}
             elif classification['category'] == ScenarioTask.MATH:
+                # Safe access to domain with fallback
+                domain = classification.get('domain', None)
+                if not domain:
+                    logger.warning(f"[{query_id}] Missing domain in classification, using default MATH domain")
+                    from src.models.tasks.math import DomainMathTask
+                    domain = DomainMathTask.MATH
                 result = await self.math_task.invoke(
                     query=query,
-                    domain=classification['domain'],
+                    domain=domain,
                     options=options,
                     verbose=verbose,
                 )
@@ -147,12 +153,18 @@ class Agent:
                     verbose=verbose,
                 )
             elif classification['category'] == ScenarioTask.RAG:
+                # Safe access to domain with fallback
+                domain = classification.get('domain', None)
+                if not domain:
+                    logger.warning(f"[{query_id}] Missing domain in classification, using default GENERAL_KNOWLEDGE domain")
+                    from src.models.tasks.rag import DomainRAGTask
+                    domain = DomainRAGTask.GENERAL_KNOWLEDGE
                 result = await self.rag_task.invoke(
                     query=query,
-                    domain=classification['domain'],
+                    domain=domain,
                     options=options,
-                    temporal_constraint=classification['temporal_constraint'],
-                    key_entities=classification['key_entities'],
+                    temporal_constraint=classification.get('temporal_constraint'),
+                    key_entities=classification.get('key_entities', []),
                     verbose=verbose,
                 )
             else:
