@@ -3,7 +3,7 @@ from src.brain.llm.services.vnpt import VNPTService
 from loguru import logger
 from src.brain.agent.tasks.base import BaseTask
 from typing import Dict
-from src.brain.agent.prompts import READING_PROMPT
+from src.brain.agent.prompts import READING_SYSTEM_PROMPT, READING_USER_PROMPT
 from src.brain.utils.json_parser import extract_answer_from_response
 
 class ReadingTask(BaseTask):
@@ -68,18 +68,21 @@ class ReadingTask(BaseTask):
             context, question = self._extract_question_from_context(query)
             choices_str = self._format_choices(options)
             
-            prompt = READING_PROMPT.format(
+            from src.brain.agent.prompts import READING_SYSTEM_PROMPT, READING_USER_PROMPT
+            
+            user_prompt = READING_USER_PROMPT.format(
                 context=context,
                 question=question,
                 choices=choices_str,
             )
 
             logger.info(
-                f"Reading Task Prompt: {prompt}"
+                f"Reading Task Prompt: {user_prompt}"
             )
             
             response_text = await self.llm_service.generate(
-                user_input=prompt,
+                user_input=user_prompt,
+                system_message=READING_SYSTEM_PROMPT,
             )
             logger.debug(f"Reading Task LLM response: {response_text}")
             

@@ -17,6 +17,7 @@ class LLMService(ABC):
     async def generate(
         self,
         user_input: str,
+        system_message: Optional[str] = None,
         stream: Optional[bool] = False,
     ) -> str:
         pass

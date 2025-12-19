@@ -83,8 +83,11 @@ Cuối cùng, cho biết rõ ràng đáp án bạn chọn (A, B, C hoặc D)."""
                     else:
                         # Use simple LLM prompting (legacy)
                         user_prompt = self.processor.format_for_llm(question)
-                        full_prompt = f"{self.system_prompt}\n\n{user_prompt}"
-                        response = await self.llm_service.generate(full_prompt)
+                        # Pass system prompt separately
+                        response = await self.llm_service.generate(
+                            user_input=user_prompt,
+                            system_message=self.system_prompt
+                        )
                         answer = self.processor.parse_answer(response)
                     
                     completed += 1

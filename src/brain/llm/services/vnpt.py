@@ -109,6 +109,7 @@ class VNPTService(LLMService):
     async def generate(
         self,
         user_input: str,
+        system_message: Optional[str] = None,
         stream: Optional[bool] = False,
     ) -> str:
         """Generate response from VNPT AI API with retry logic (3 retries, exponential backoff)"""
@@ -116,7 +117,7 @@ class VNPTService(LLMService):
             raise NotImplementedError("Streaming is not supported by VNPTService yet.")
         
         try:
-            return await self._generate_with_retry(user_input)
+            return await self._generate_with_retry(user_input, system_message)
         except Exception as e:
             raise RuntimeError(f"Error generating response from VNPT: {str(e)}")
     
@@ -124,14 +125,18 @@ class VNPTService(LLMService):
         max_retries=3,
         exceptions=(aiohttp.ClientError, asyncio.TimeoutError, ConnectionError)
     )
-    async def _generate_with_retry(self, user_input: str) -> str:
+    async def _generate_with_retry(self, user_input: str, system_message: Optional[str] = None) -> str:
         """Internal method with retry logic for generate()"""
         headers = self._get_headers()
+        
+        messages = []
+        if system_message:
+            messages.append({'role': 'system', 'content': system_message})
+        messages.append({'role': 'user', 'content': user_input})
+
         json_data = {
             'model': self.model.replace('-', '_'),
-            'messages': [
-                {'role': 'user', 'content': user_input}
-            ],
+            'messages': messages,
             'temperature': 1.0,
             'top_p': 1.0,
             'top_k': 20,

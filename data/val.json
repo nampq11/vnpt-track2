@@ -955,7 +955,7 @@
       "C: Để giảm số lượng nhân sự mà không cần đánh giá hiệu suất.",
       "D: Không cần thu thập thông tin về hiệu suất làm việc."
     ],
-    "answer": "A"
+    "answer": "B"
   },
   {
     "qid": "val_0078",
@@ -977,7 +977,7 @@
       "Làm người.",
       "Cả a, b, c."
     ],
-    "answer": "C"
+    "answer": "D"
   },
   {
     "qid": "val_0080",

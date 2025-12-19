@@ -4,7 +4,6 @@ from src.brain.llm.services.vnpt import VNPTService
 from loguru import logger
 from src.brain.agent.tasks.base import BaseTask
 from typing import Dict, List, Optional
-from src.brain.agent.prompts import RAG_PROMPT, RAG_PROMPT_WITH_CONTEXT
 from src.brain.agent.domain_mapper import DomainMapper
 from src.brain.utils.json_parser import extract_answer_from_response
 import os
@@ -75,47 +74,6 @@ class RAGTask(BaseTask):
         """Extract JSON answer from LLM response with CoT reasoning."""
         return extract_answer_from_response(text, options)
 
-    def _infer_category_filter(
-        self,
-        key_entities: Optional[List[str]] = None,
-    ) -> Optional[List[str]]:
-        """
-        Infer relevant categories from extracted entities.
-        
-        Uses entities from classification service to map to data categories.
-        """
-        if not key_entities:
-            return None
-        
-        # Map entity keywords to data categories
-        category_keywords = {
-            "Lich_Su_Viet_nam": ["lịch sử", "chiến tranh", "kháng chiến", "thời kỳ", "triều đại", "cách mạng", "khởi nghĩa"],
-            "Bac_Ho": ["Hồ Chí Minh", "Bác Hồ", "Nguyễn Ái Quốc", "Chủ tịch Hồ Chí Minh"],
-            "Dia_ly_viet_nam": ["địa lý", "vùng", "miền", "tỉnh", "thành phố", "đồng bằng", "núi", "sông"],
-            "Dia_chinh_Viet_nam": ["hành chính", "quận", "huyện", "xã", "phường", "thị xã"],
-            "Van_Hoa_Viet_Nam": ["văn hóa", "nghệ thuật", "truyền thống", "phong tục", "lễ hội", "di sản"],
-            "Van_hoa_am_thuc": ["ẩm thực", "món ăn", "đặc sản", "nấu ăn"],
-            "Phap_luat_Viet_Nam": ["luật", "pháp luật", "quy định", "nghị định", "điều", "khoản", "bộ luật"],
-            "dang_cong_san_viet_nam": ["Đảng", "cộng sản", "Đại hội", "Trung ương", "BCH", "Ban Chấp hành"],
-            "Kinh_Te_Viet_Nam": ["kinh tế", "GDP", "thương mại", "công nghiệp", "nông nghiệp", "xuất khẩu"],
-            "khang_chien_lon": ["Điện Biên Phủ", "kháng chiến", "chiến thắng", "chiến dịch"],
-            "Giao_duc": ["giáo dục", "đào tạo", "trường", "học", "sinh viên", "thi cử"],
-            "Dia_dien_du_lich": ["du lịch", "danh lam", "thắng cảnh", "di tích", "vườn quốc gia", "Hạ Long", "Sapa"],
-            "Quoc_phong_Viet_nam": ["quốc phòng", "an ninh", "quân đội", "lực lượng vũ trang"],
-        }
-        
-        # Join entities to single search text
-        entities_text = " ".join(key_entities).lower()
-        matched_categories = []
-        
-        for category, keywords in category_keywords.items():
-            for keyword in keywords:
-                if keyword.lower() in entities_text:
-                    matched_categories.append(category)
-                    break
-        
-        return matched_categories if matched_categories else None
-    
     async def invoke(
         self,
         query: str,
@@ -139,18 +97,9 @@ class RAGTask(BaseTask):
                 try:
                     from src.brain.rag.lancedb_retriever import format_retrieval_context
                     
-                    # --- SMART DOMAIN-AWARE FILTERING ---
-                    # Priority 1: Use domain mapping for category filtering
-                    domain_categories = self.domain_mapper.get_categories_for_domain(domain)
-                    
-                    # Priority 2: Infer categories from entities (fallback)
-                    entity_categories = self._infer_category_filter(key_entities)
-                    
-                    # Merge strategies for optimal filtering
-                    category_filter = self.domain_mapper.merge_with_entity_categories(
-                        domain_categories=domain_categories,
-                        entity_categories=entity_categories,
-                    )
+                    # --- DOMAIN-AWARE FILTERING ---
+                    # Use domain mapping for category filtering (from classification)
+                    category_filter = self.domain_mapper.get_categories_for_domain(domain)
                     
                     if category_filter:
                         logger.info(f"Using category filter: {category_filter}")
@@ -173,8 +122,14 @@ class RAGTask(BaseTask):
                     logger.warning(f"Retrieval failed: {e}")
             
             # Build prompt
+            from src.brain.agent.prompts import (
+                RAG_SYSTEM_PROMPT, RAG_USER_PROMPT,
+                RAG_WITH_CONTEXT_SYSTEM_PROMPT, RAG_WITH_CONTEXT_USER_PROMPT
+            )
+            
             if context:
-                prompt = RAG_PROMPT_WITH_CONTEXT.format(
+                system_prompt = RAG_WITH_CONTEXT_SYSTEM_PROMPT
+                user_prompt = RAG_WITH_CONTEXT_USER_PROMPT.format(
                     context=context,
                     query=query,
                     temporal_hint=temporal_hint,
@@ -182,15 +137,18 @@ class RAGTask(BaseTask):
                     choices=choices_str,
                 )
             else:
-                prompt = RAG_PROMPT.format(
+                system_prompt = RAG_SYSTEM_PROMPT
+                user_prompt = RAG_USER_PROMPT.format(
                     query=query,
                     temporal_hint=temporal_hint,
                     entities_hint=entities_hint,
                     choices=choices_str,
                 )
-            logger.info(f"RAG Task Prompt: {prompt}")
+            
+            logger.info(f"RAG Task User Prompt: {user_prompt}")
             response_text = await self.llm_service.generate(
-                user_input=prompt,
+                user_input=user_prompt,
+                system_message=system_prompt,
             )
             logger.debug(f"RAG Task LLM response: {response_text}")
             

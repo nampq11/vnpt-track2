@@ -54,6 +54,7 @@ class AzureService(LLMService):
     async def generate(
         self,
         user_input: str,
+        system_message: Optional[str] = None,
         stream: Optional[bool] = False,
     ) -> str:
         """
@@ -64,17 +65,21 @@ class AzureService(LLMService):
         
         Args:
             user_input: User input text
+            system_message: Optional system prompt
             stream: Whether to stream response
             
         Returns:
             Generated response text
         """
         try:
+            messages = []
+            if system_message:
+                messages.append({"role": "system", "content": system_message})
+            messages.append({"role": "user", "content": user_input})
+
             response = self.client.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {"role": "user", "content": user_input}
-                ],
+                messages=messages,
                 stream=stream,
             )
             

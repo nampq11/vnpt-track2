@@ -8,6 +8,8 @@ import uuid
 import json
 from loguru import logger
 
+from src.brain.rag.text_preprocessor import clean_document as preprocess_text
+
 
 @dataclass
 class DocumentChunk:
@@ -156,6 +158,9 @@ class DocumentProcessor:
         """Split text into overlapping chunks."""
         if not text.strip():
             return []
+        
+        # Clean text before chunking (normalize Vietnamese, remove noise)
+        text = preprocess_text(text)
         
         chunks = []
         start = 0

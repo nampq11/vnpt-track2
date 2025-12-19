@@ -9,6 +9,7 @@ from pathlib import Path
 
 from src.brain.llm.services.type import LLMService
 from src.brain.rag.lancedb_index import LanceDBIndex
+from src.brain.rag.text_preprocessor import clean_query, tokenize_for_fts
 
 
 @dataclass
@@ -70,8 +71,14 @@ class LanceDBRetriever:
             f"category_filter: {category_filter}, categories_filter: {categories_filter}"
         )
         
-        # Get query embedding
-        query_embedding = await self._get_query_embedding(query)
+        # Clean query before processing
+        cleaned_query = clean_query(query)
+        
+        # Tokenize for FTS (joins compound words with underscores)
+        tokenized_query = tokenize_for_fts(cleaned_query)
+        
+        # Get query embedding using cleaned query
+        query_embedding = await self._get_query_embedding(cleaned_query)
         if query_embedding is None:
             logger.warning("Failed to get embedding, skipping retrieval")
             return []
@@ -83,10 +90,10 @@ class LanceDBRetriever:
         elif categories_filter:
             categories = categories_filter
         
-        # Perform hybrid search
+        # Perform hybrid search with tokenized query for better FTS matching
         try:
             results = self.index.hybrid_search(
-                query_text=query,
+                query_text=tokenized_query,
                 query_embedding=query_embedding,
                 top_k=top_k,
                 categories=categories,
@@ -106,21 +113,29 @@ class LanceDBRetriever:
                     top_k=top_k,
                 )
             
-            # Convert to result format
+            # Convert to result format - batch fetch for efficiency
             results = []
-            table = self.index._get_table()
-            df = table.to_pandas()
-            for idx, sim in zip(indices, similarities):
-                row = df[df["id"] == idx].iloc[0]
-                results.append({
-                    "chunk_id": row["chunk_id"],
-                    "content": row["content"],
-                    "_distance": 1 - sim,
-                    "category": row.get("category", ""),
-                    "title": row.get("title", ""),
-                    "section": row.get("section", ""),
-                    "source_file": row.get("source_file", ""),
-                })
+            if len(indices) > 0:
+                table = self.index._get_table()
+                # Batch fetch by IDs instead of loading entire table
+                idx_list = ", ".join(map(str, indices))
+                rows_df = table.search().where(f"id IN ({idx_list})").limit(len(indices)).to_pandas()
+                
+                # Create lookup dict
+                rows_by_id = {row["id"]: row for _, row in rows_df.iterrows()}
+                
+                for idx, sim in zip(indices, similarities):
+                    if idx in rows_by_id:
+                        row = rows_by_id[idx]
+                        results.append({
+                            "chunk_id": row["chunk_id"],
+                            "content": row["content"],
+                            "_distance": 1 - sim,
+                            "category": row.get("category", ""),
+                            "title": row.get("title", ""),
+                            "section": row.get("section", ""),
+                            "source_file": row.get("source_file", ""),
+                        })
         
         # Convert to RetrievalResult
         retrieval_results = []

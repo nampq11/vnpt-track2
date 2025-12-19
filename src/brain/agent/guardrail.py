@@ -1,8 +1,8 @@
+import json
 from src.brain.llm.services.type import LLMService
 from loguru import logger
 import numpy as np
 from typing import Any, Dict, List, Optional, Tuple
-from src.brain.agent.prompts import SAFETY_SELECTOR_PROMPT
 from src.brain.utils.json_parser import extract_answer_from_response
 from dotenv import load_dotenv
 import os
@@ -91,14 +91,20 @@ class GuardrailService:
 
             # If violation detected, call LLM to get safe answer
             if user_input is not None and not is_safe:
-                prompt = SAFETY_SELECTOR_PROMPT.format(
+                from src.brain.agent.prompts import SAFETY_SELECTOR_SYSTEM_PROMPT, SAFETY_SELECTOR_USER_PROMPT
+                
+                # Format options for prompt
+                options_str = "\n".join([f"{k}. {v}" for k, v in sorted(options.items())]) if options else ""
+                
+                user_prompt = SAFETY_SELECTOR_USER_PROMPT.format(
                     query=user_input,
                     violation_reason=violation_reason or "None",
-                    options=options
+                    options=options_str
                 )
                 try:
                     response_text = await self.llm_service.generate(
-                        user_input=prompt,
+                        user_input=user_prompt,
+                        system_message=SAFETY_SELECTOR_SYSTEM_PROMPT
                     )
 
                     result = self._parse_json_answer_robust(options, response_text)

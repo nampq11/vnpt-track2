@@ -3,7 +3,6 @@ from src.brain.llm.services.vnpt import VNPTService
 from loguru import logger
 from src.brain.agent.tasks.base import BaseTask
 from typing import Dict
-from src.brain.agent.prompts import CHEMISTRY_PROMPT, MATH_PROMPT
 from src.models.tasks.math import DomainMathTask
 from src.brain.utils.json_parser import extract_answer_from_response
 
@@ -42,25 +41,29 @@ class MathTask(BaseTask):
         try:
             logger.debug(f"Math Task invoked with query: {query[:50]}... and {len(options)} options and domain: {domain}")
             choices_str = self._format_choices(options)
-            prompt = ""
-            if domain == DomainMathTask.MATH:
-                prompt = MATH_PROMPT.format(
-                    query=query,
-                    choices=choices_str,
-                )
-            elif domain == DomainMathTask.CHEMISTRY:
-                prompt = CHEMISTRY_PROMPT.format(
+            
+            from src.brain.agent.prompts import (
+                MATH_SYSTEM_PROMPT, MATH_USER_PROMPT,
+                CHEMISTRY_SYSTEM_PROMPT, CHEMISTRY_USER_PROMPT
+            )
+
+            if domain == DomainMathTask.CHEMISTRY:
+                system_prompt = CHEMISTRY_SYSTEM_PROMPT
+                user_prompt = CHEMISTRY_USER_PROMPT.format(
                     query=query,
                     choices=choices_str,
                 )
             else:
-                prompt = MATH_PROMPT.format(
+                system_prompt = MATH_SYSTEM_PROMPT
+                user_prompt = MATH_USER_PROMPT.format(
                     query=query,
                     choices=choices_str,
                 )
-            logger.info(f"Math Task calling LLM with prompt: {prompt}")
+            
+            logger.info(f"Math Task calling LLM with user prompt: {user_prompt}")
             response_text = await self.llm_service.generate(
-                user_input=prompt,
+                user_input=user_prompt,
+                system_message=system_prompt,
             )
             logger.debug(f"Math Task LLM response: {response_text}")
             result = self._parse_json_answer(response_text, options)

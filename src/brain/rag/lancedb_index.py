@@ -97,7 +97,8 @@ class LanceDBIndex:
         # Create scalar indexes for efficient filtering
         self._table.create_scalar_index("chunk_id")
         self._table.create_scalar_index("source_file")
-        logger.info("  - Scalar indexes on chunk_id, source_file")
+        self._table.create_scalar_index("category")
+        logger.info("  - Scalar indexes on chunk_id, source_file, category")
         
         logger.info(
             f"Built LanceDB table with {len(data)} vectors at {self.db_path}"
@@ -310,6 +311,7 @@ class LanceDBIndex:
         try:
             table = self._get_table()
             return table.count_rows()
-        except:
+        except Exception as e:
+            logger.debug(f"Could not count rows: {e}")
             return 0
 

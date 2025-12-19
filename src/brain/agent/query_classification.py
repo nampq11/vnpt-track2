@@ -1,7 +1,6 @@
 from src.brain.llm.services.type import LLMService
 from loguru import logger
 from typing import Any, Dict
-from src.brain.agent.prompts import QUERY_CLASSIFICATION_PROMPT
 from src.brain.utils.json_parser import parse_json_from_llm_response
 
 class QueryClassificationService:
@@ -18,11 +17,14 @@ class QueryClassificationService:
     ) -> Dict[str, Any]:
         result = None
         try:
-            prompt = QUERY_CLASSIFICATION_PROMPT.format(
+            from src.brain.agent.prompts import QUERY_CLASSIFICATION_SYSTEM_PROMPT, QUERY_CLASSIFICATION_USER_PROMPT
+            
+            user_prompt = QUERY_CLASSIFICATION_USER_PROMPT.format(
                 query=query
             )
             response_text = await self.llm_service.generate(
-                user_input=prompt
+                user_input=user_prompt,
+                system_message=QUERY_CLASSIFICATION_SYSTEM_PROMPT
             )
             result = self._parse_json_answer_robust(response_text)
             logger.info(f"Query Classification Result: {result}")
