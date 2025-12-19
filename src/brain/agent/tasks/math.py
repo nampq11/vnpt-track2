@@ -5,6 +5,8 @@ from src.brain.agent.tasks.base import BaseTask
 from typing import Dict
 from src.models.tasks.math import DomainMathTask
 from src.brain.utils.json_parser import extract_answer_from_response
+from src.brain.system_prompt import EnhancedPromptManager, PromptType
+
 
 class MathTask(BaseTask):
     def __init__(
@@ -23,6 +25,8 @@ class MathTask(BaseTask):
             # Use provided service (Azure, Ollama, etc.)
             self.llm_service = llm_service
             logger.info(f"Initialized Math Task with {llm_service.__class__.__name__}")
+        
+        self.prompt_manager = EnhancedPromptManager.get_instance()
 
     def _format_choices(self, options: Dict[str, str]) -> str:
         """Format choices for prompt."""
@@ -41,21 +45,13 @@ class MathTask(BaseTask):
         try:
             logger.debug(f"Math Task invoked with query: {query[:50]}... and {len(options)} options and domain: {domain}")
             choices_str = self._format_choices(options)
-            
-            from src.brain.agent.prompts import (
-                MATH_SYSTEM_PROMPT, MATH_USER_PROMPT,
-                CHEMISTRY_SYSTEM_PROMPT, CHEMISTRY_USER_PROMPT
-            )
 
             if domain == DomainMathTask.CHEMISTRY:
-                system_prompt = CHEMISTRY_SYSTEM_PROMPT
-                user_prompt = CHEMISTRY_USER_PROMPT.format(
-                    query=query,
-                    choices=choices_str,
-                )
+                system_prompt, user_template = self.prompt_manager.get_prompt(PromptType.CHEMISTRY)
             else:
-                system_prompt = MATH_SYSTEM_PROMPT
-                user_prompt = MATH_USER_PROMPT.format(
+                system_prompt, user_template = self.prompt_manager.get_prompt(PromptType.MATH)
+            
+            user_prompt = user_template.format(
                     query=query,
                     choices=choices_str,
                 )

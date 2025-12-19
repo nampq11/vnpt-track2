@@ -4,10 +4,12 @@ from loguru import logger
 import numpy as np
 from typing import Any, Dict, List, Optional, Tuple
 from src.brain.utils.json_parser import extract_answer_from_response
+from src.brain.system_prompt import EnhancedPromptManager, PromptType
 from dotenv import load_dotenv
 import os
 
 load_dotenv()
+
 
 class GuardrailService:
     def __init__(
@@ -15,6 +17,7 @@ class GuardrailService:
         llm_service: LLMService
     ) -> None:
         self.llm_service = llm_service
+        self.prompt_manager = EnhancedPromptManager.get_instance()
         
         # Get the safety index path from environment or use default
         safety_index_path = os.getenv('SAFETY_INDEX_PATH', 'data/embeddings/safety_index.npy')
@@ -91,12 +94,12 @@ class GuardrailService:
 
             # If violation detected, call LLM to get safe answer
             if user_input is not None and not is_safe:
-                from src.brain.agent.prompts import SAFETY_SELECTOR_SYSTEM_PROMPT, SAFETY_SELECTOR_USER_PROMPT
+                system_prompt, user_template = self.prompt_manager.get_prompt(PromptType.SAFETY)
                 
                 # Format options for prompt
                 options_str = "\n".join([f"{k}. {v}" for k, v in sorted(options.items())]) if options else ""
                 
-                user_prompt = SAFETY_SELECTOR_USER_PROMPT.format(
+                user_prompt = user_template.format(
                     query=user_input,
                     violation_reason=violation_reason or "None",
                     options=options_str
@@ -104,7 +107,7 @@ class GuardrailService:
                 try:
                     response_text = await self.llm_service.generate(
                         user_input=user_prompt,
-                        system_message=SAFETY_SELECTOR_SYSTEM_PROMPT
+                        system_message=system_prompt
                     )
 
                     result = self._parse_json_answer_robust(options, response_text)

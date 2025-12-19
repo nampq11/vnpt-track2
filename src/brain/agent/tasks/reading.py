@@ -3,8 +3,9 @@ from src.brain.llm.services.vnpt import VNPTService
 from loguru import logger
 from src.brain.agent.tasks.base import BaseTask
 from typing import Dict
-from src.brain.agent.prompts import READING_SYSTEM_PROMPT, READING_USER_PROMPT
 from src.brain.utils.json_parser import extract_answer_from_response
+from src.brain.system_prompt import EnhancedPromptManager, PromptType
+
 
 class ReadingTask(BaseTask):
     def __init__(
@@ -23,6 +24,8 @@ class ReadingTask(BaseTask):
             # Use provided service (Azure, Ollama, etc.)
             self.llm_service = llm_service
             logger.info(f"Initialized Reading Task with {llm_service.__class__.__name__}")
+        
+        self.prompt_manager = EnhancedPromptManager.get_instance()
 
     def _extract_question_from_context(self, query: str) -> tuple:
         """Separate context from question in reading comprehension queries."""
@@ -68,9 +71,9 @@ class ReadingTask(BaseTask):
             context, question = self._extract_question_from_context(query)
             choices_str = self._format_choices(options)
             
-            from src.brain.agent.prompts import READING_SYSTEM_PROMPT, READING_USER_PROMPT
+            system_prompt, user_template = self.prompt_manager.get_prompt(PromptType.READING)
             
-            user_prompt = READING_USER_PROMPT.format(
+            user_prompt = user_template.format(
                 context=context,
                 question=question,
                 choices=choices_str,
@@ -82,7 +85,7 @@ class ReadingTask(BaseTask):
             
             response_text = await self.llm_service.generate(
                 user_input=user_prompt,
-                system_message=READING_SYSTEM_PROMPT,
+                system_message=system_prompt,
             )
             logger.debug(f"Reading Task LLM response: {response_text}")
             

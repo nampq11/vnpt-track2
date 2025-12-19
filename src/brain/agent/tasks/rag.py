@@ -6,7 +6,9 @@ from src.brain.agent.tasks.base import BaseTask
 from typing import Dict, List, Optional
 from src.brain.agent.domain_mapper import DomainMapper
 from src.brain.utils.json_parser import extract_answer_from_response
+from src.brain.system_prompt import EnhancedPromptManager, PromptType
 import os
+
 
 class RAGTask(BaseTask):
     def __init__(
@@ -33,6 +35,7 @@ class RAGTask(BaseTask):
         self.use_retrieval = use_retrieval
         self.retrieval_top_k = retrieval_top_k
         self.domain_mapper = DomainMapper()
+        self.prompt_manager = EnhancedPromptManager.get_instance()
         
         # Initialize retriever if enabled and index exists
         if use_retrieval and retriever is not None:
@@ -121,15 +124,10 @@ class RAGTask(BaseTask):
                 except Exception as e:
                     logger.warning(f"Retrieval failed: {e}")
             
-            # Build prompt
-            from src.brain.agent.prompts import (
-                RAG_SYSTEM_PROMPT, RAG_USER_PROMPT,
-                RAG_WITH_CONTEXT_SYSTEM_PROMPT, RAG_WITH_CONTEXT_USER_PROMPT
-            )
-            
+            # Build prompt based on whether we have context
             if context:
-                system_prompt = RAG_WITH_CONTEXT_SYSTEM_PROMPT
-                user_prompt = RAG_WITH_CONTEXT_USER_PROMPT.format(
+                system_prompt, user_template = self.prompt_manager.get_prompt(PromptType.RAG_WITH_CONTEXT)
+                user_prompt = user_template.format(
                     context=context,
                     query=query,
                     temporal_hint=temporal_hint,
@@ -137,8 +135,8 @@ class RAGTask(BaseTask):
                     choices=choices_str,
                 )
             else:
-                system_prompt = RAG_SYSTEM_PROMPT
-                user_prompt = RAG_USER_PROMPT.format(
+                system_prompt, user_template = self.prompt_manager.get_prompt(PromptType.RAG)
+                user_prompt = user_template.format(
                     query=query,
                     temporal_hint=temporal_hint,
                     entities_hint=entities_hint,
